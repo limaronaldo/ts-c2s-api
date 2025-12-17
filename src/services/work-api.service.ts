@@ -179,6 +179,25 @@ export class WorkApiService {
         return { data: null, timedOut: true, error: "Request timed out" };
       }
 
+      // Treat connection errors as timeout - allow partial enrichment to proceed
+      // This handles cases where Work API is down or IP blocked
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorCode = (error as { code?: string })?.code;
+
+      if (
+        errorCode === "ConnectionRefused" ||
+        errorCode === "ECONNREFUSED" ||
+        errorMessage.includes("ConnectionRefused") ||
+        errorMessage.includes("ECONNREFUSED")
+      ) {
+        workApiLogger.warn(
+          { cpf, error: errorMessage },
+          "Work API connection refused - proceeding with partial enrichment",
+        );
+        return { data: null, timedOut: true, error: "Connection refused" };
+      }
+
       workApiLogger.error(
         { cpf, error },
         "Failed to fetch from Work API after retries",

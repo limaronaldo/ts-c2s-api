@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgSchema,
   uuid,
   varchar,
   text,
@@ -11,8 +12,11 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-// Parties table (companies and people)
-export const parties = pgTable(
+// Define the analytics schema
+const analyticsSchema = pgSchema("analytics");
+
+// Parties table (companies and people) - in analytics schema
+export const parties = analyticsSchema.table(
   "parties",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -37,8 +41,8 @@ export const parties = pgTable(
   }),
 );
 
-// Party contacts (phones, emails)
-export const partyContacts = pgTable(
+// Party contacts (phones, emails) - in analytics schema
+export const partyContacts = analyticsSchema.table(
   "party_contacts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -62,8 +66,8 @@ export const partyContacts = pgTable(
   }),
 );
 
-// Addresses
-export const addresses = pgTable(
+// Addresses - in analytics schema
+export const addresses = analyticsSchema.table(
   "addresses",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -86,8 +90,8 @@ export const addresses = pgTable(
   }),
 );
 
-// Webhook events for idempotency
-export const webhookEvents = pgTable(
+// Webhook events for idempotency - in analytics schema
+export const webhookEvents = analyticsSchema.table(
   "webhook_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -110,7 +114,8 @@ export const webhookEvents = pgTable(
 );
 
 // Google Ads leads - matches analytics.google_ads_leads schema
-export const googleAdsLeads = pgTable(
+// Note: explicitly using analytics schema to avoid conflict with public.google_ads_leads
+export const googleAdsLeads = analyticsSchema.table(
   "google_ads_leads",
   {
     id: uuid("id").primaryKey().defaultRandom(),
