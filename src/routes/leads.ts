@@ -1,31 +1,34 @@
-import { Elysia, t } from 'elysia'
-import { container } from '../container'
-import { apiLogger } from '../utils/logger'
+import { Elysia, t } from "elysia";
+import { container } from "../container";
+import { apiLogger } from "../utils/logger";
 
-export const leadsRoute = new Elysia({ prefix: '/leads' })
+export const leadsRoute = new Elysia({ prefix: "/leads" })
   .get(
-    '/:leadId',
+    "/:leadId",
     async ({ params }) => {
-      const lead = await container.dbStorage.findLeadByLeadId(params.leadId)
+      const lead = await container.dbStorage.findLeadByLeadId(params.leadId);
 
       if (!lead) {
         return {
-          error: { code: 'NOT_FOUND', message: 'Lead not found' },
-        }
+          error: { code: "NOT_FOUND", message: "Lead not found" },
+        };
       }
 
-      return { data: lead }
+      return { data: lead };
     },
     {
       params: t.Object({
         leadId: t.String(),
       }),
-    }
+    },
   )
   .post(
-    '/',
+    "/",
     async ({ body }) => {
-      apiLogger.info({ leadId: body.leadId, name: body.name }, 'Creating new lead')
+      apiLogger.info(
+        { leadId: body.leadId, name: body.name },
+        "Creating new lead",
+      );
 
       const lead = await container.dbStorage.upsertGoogleAdsLead({
         leadId: body.leadId,
@@ -35,10 +38,10 @@ export const leadsRoute = new Elysia({ prefix: '/leads' })
         campaignId: body.campaignId,
         campaignName: body.campaignName,
         rawData: body.rawData,
-        enrichmentStatus: 'pending',
-      })
+        enrichmentStatus: "pending",
+      });
 
-      return { data: lead }
+      return { data: lead };
     },
     {
       body: t.Object({
@@ -50,5 +53,5 @@ export const leadsRoute = new Elysia({ prefix: '/leads' })
         campaignName: t.Optional(t.String()),
         rawData: t.Optional(t.Record(t.String(), t.Unknown())),
       }),
-    }
-  )
+    },
+  );

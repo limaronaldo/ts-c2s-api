@@ -1,11 +1,14 @@
-import { Elysia, t } from 'elysia'
-import { container } from '../container'
-import { apiLogger } from '../utils/logger'
+import { Elysia, t } from "elysia";
+import { container } from "../container";
+import { apiLogger } from "../utils/logger";
 
-export const enrichRoute = new Elysia({ prefix: '/enrich' }).post(
-  '/',
+export const enrichRoute = new Elysia({ prefix: "/enrich" }).post(
+  "/",
   async ({ body }) => {
-    apiLogger.info({ leadId: body.leadId, name: body.name }, 'Enrichment request received')
+    apiLogger.info(
+      { leadId: body.leadId, name: body.name },
+      "Enrichment request received",
+    );
 
     // Store the lead first
     await container.dbStorage.upsertGoogleAdsLead({
@@ -16,8 +19,8 @@ export const enrichRoute = new Elysia({ prefix: '/enrich' }).post(
       campaignId: body.campaignId,
       campaignName: body.campaignName,
       rawData: body.rawData,
-      enrichmentStatus: 'processing',
-    })
+      enrichmentStatus: "processing",
+    });
 
     // Run enrichment
     const result = await container.enrichment.enrichLead({
@@ -29,9 +32,9 @@ export const enrichRoute = new Elysia({ prefix: '/enrich' }).post(
       campaignName: body.campaignName,
       source: body.source,
       rawData: body.rawData,
-    })
+    });
 
-    return { data: result }
+    return { data: result };
   },
   {
     body: t.Object({
@@ -44,5 +47,5 @@ export const enrichRoute = new Elysia({ prefix: '/enrich' }).post(
       source: t.Optional(t.String()),
       rawData: t.Optional(t.Record(t.String(), t.Unknown())),
     }),
-  }
-)
+  },
+);

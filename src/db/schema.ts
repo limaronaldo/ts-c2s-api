@@ -109,7 +109,7 @@ export const webhookEvents = pgTable(
   }),
 );
 
-// Google Ads leads
+// Google Ads leads - matches analytics.google_ads_leads schema
 export const googleAdsLeads = pgTable(
   "google_ads_leads",
   {
