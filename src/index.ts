@@ -22,6 +22,7 @@ if (hasFullConfig()) {
   const { queuesRoute } = await import("./routes/queues");
   const { activitiesRoute } = await import("./routes/activities");
   const { companyRoute } = await import("./routes/company");
+  const { metricsRoute } = await import("./routes/metrics");
 
   app
     .use(leadsRoute)
@@ -33,7 +34,8 @@ if (hasFullConfig()) {
     .use(tagsRoute)
     .use(queuesRoute)
     .use(activitiesRoute)
-    .use(companyRoute);
+    .use(companyRoute)
+    .use(metricsRoute);
 } else {
   logger.warn("Running in minimal mode - only health check available");
   logger.warn(

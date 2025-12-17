@@ -1,6 +1,7 @@
 import { getConfig } from "../config";
 import { c2sLogger } from "../utils/logger";
 import { AppError } from "../errors/app-error";
+import { withRetry, isRetryableError } from "../utils/retry";
 
 // C2S Lead format (matching /integration/leads API)
 // See: https://api.contact2sale.com/integration/leads
@@ -76,15 +77,42 @@ export interface C2SActivityCreate {
  * C2S API Service
  * Uses /integration/* endpoints as documented
  * Port of c2s-gateway Python client to TypeScript
+ *
+ * Rate Limiting: Enforces 0.5s delay between requests to avoid C2S API throttling
+ * Reference: Lead Operations Guide - "minimum 0.5s delay between sequential requests"
  */
 export class C2SService {
   private readonly token: string;
   private readonly baseUrl: string;
 
+  // Rate limiting - prevents C2S API throttling
+  private lastRequestTime: number = 0;
+  private readonly RATE_LIMIT_MS = 500; // 0.5 seconds minimum between requests
+
   constructor() {
     const config = getConfig();
     this.token = config.C2S_TOKEN;
     this.baseUrl = config.C2S_URL;
+  }
+
+  /**
+   * Enforces rate limiting by waiting if needed before making a request
+   * This prevents C2S API from throttling our requests
+   */
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+
+    if (timeSinceLastRequest < this.RATE_LIMIT_MS) {
+      const waitTime = this.RATE_LIMIT_MS - timeSinceLastRequest;
+      c2sLogger.debug(
+        { waitTime },
+        "Rate limiting: waiting before next request",
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+
+    this.lastRequestTime = Date.now();
   }
 
   private getHeaders(): HeadersInit {
@@ -100,6 +128,9 @@ export class C2SService {
     params?: Record<string, string>,
     body?: unknown,
   ): Promise<T> {
+    // Enforce rate limiting before each request
+    await this.enforceRateLimit();
+
     let url = `${this.baseUrl}${endpoint}`;
 
     if (params && Object.keys(params).length > 0) {
@@ -109,28 +140,48 @@ export class C2SService {
 
     c2sLogger.debug({ method, url, body }, "C2S API request");
 
-    try {
-      const response = await fetch(url, {
-        method,
-        headers: this.getHeaders(),
-        body: body ? JSON.stringify(body) : undefined,
-      });
+    // Use retry logic with exponential backoff for transient failures
+    // Reference: Lead Operations Guide - "3 retries max, exponential backoff: 1s, 2s, 4s"
+    return withRetry(
+      async () => {
+        const response = await fetch(url, {
+          method,
+          headers: this.getHeaders(),
+          body: body ? JSON.stringify(body) : undefined,
+        });
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        c2sLogger.error(
-          { status: response.status, body: errorBody, url },
-          "C2S API error",
-        );
-        throw new Error(`C2S returned ${response.status}: ${errorBody}`);
-      }
+        if (!response.ok) {
+          const errorBody = await response.text();
+          c2sLogger.error(
+            { status: response.status, body: errorBody, url },
+            "C2S API error",
+          );
+          throw new Error(`C2S returned ${response.status}: ${errorBody}`);
+        }
 
-      const data = await response.json();
-      return data as T;
-    } catch (error) {
-      c2sLogger.error({ error, url }, "C2S API request failed");
+        const data = await response.json();
+        return data as T;
+      },
+      {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        shouldRetry: isRetryableError,
+        onRetry: (error, attempt, delayMs) => {
+          c2sLogger.warn(
+            {
+              url,
+              attempt,
+              delayMs,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "Retrying C2S API request",
+          );
+        },
+      },
+    ).catch((error) => {
+      c2sLogger.error({ error, url }, "C2S API request failed after retries");
       throw AppError.serviceUnavailable("C2S");
-    }
+    });
   }
 
   // ========== LEADS MANAGEMENT ==========

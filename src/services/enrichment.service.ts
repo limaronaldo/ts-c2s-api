@@ -1,4 +1,8 @@
-import { WorkApiService, type WorkApiPerson } from "./work-api.service";
+import {
+  WorkApiService,
+  type WorkApiPerson,
+  type WorkApiFetchResult,
+} from "./work-api.service";
 import { CpfDiscoveryService } from "./cpf-discovery.service";
 import { C2SService, type C2SLeadCreate } from "./c2s.service";
 import { DbStorageService } from "./db-storage.service";
@@ -13,6 +17,7 @@ import { normalizePhone, formatPhoneWithCountryCode } from "../utils/phone";
 import {
   buildDescription,
   buildSimpleDescription,
+  buildPartialEnrichmentDescription,
 } from "../utils/description-builder";
 import { enrichmentLogger } from "../utils/logger";
 import { getConfig } from "../config";
@@ -35,6 +40,7 @@ export interface EnrichmentResult {
   c2sCustomerId?: string;
   partyId?: string;
   enriched: boolean;
+  partialEnrichment?: boolean; // True when Work API timed out
   message: string;
 }
 
@@ -115,16 +121,28 @@ export class EnrichmentService {
         };
       }
 
-      // Step 2: Fetch enrichment data from Work API
-      const personData = await this.workApiService.fetchByCpf(cpf);
+      // Step 2: Fetch enrichment data from Work API (with timeout handling)
+      const workApiResult =
+        await this.workApiService.fetchByCpfWithTimeout(cpf);
 
-      if (!personData) {
+      // Handle Work API timeout - proceed with partial enrichment
+      if (workApiResult.timedOut) {
+        enrichmentLogger.warn(
+          { leadId, cpf },
+          "Work API timed out, creating partial enrichment customer",
+        );
+        return this.createPartialEnrichmentCustomer(lead, cpf);
+      }
+
+      if (!workApiResult.data) {
         enrichmentLogger.info(
           { leadId, cpf },
           "No enrichment data found, creating basic customer",
         );
         return this.createBasicCustomer(lead, cpf);
       }
+
+      const personData = workApiResult.data;
 
       // Step 3: Store in database
       const party = await this.storePartyData(personData, cpf);
@@ -325,6 +343,60 @@ export class EnrichmentService {
       c2sCustomerId: result.data.id,
       enriched: false,
       message: "Customer created with CPF but no enrichment data",
+    };
+  }
+
+  /**
+   * Create customer with partial enrichment when Work API times out
+   * CPF was discovered but enrichment data couldn't be fetched in time
+   * Reference: Lead Operations Guide - "partial fallback" pattern
+   */
+  private async createPartialEnrichmentCustomer(
+    lead: LeadData,
+    cpf: string,
+  ): Promise<EnrichmentResult> {
+    const description = buildPartialEnrichmentDescription(
+      lead.name,
+      cpf,
+      lead.phone,
+      lead.email,
+      lead.campaignName,
+    );
+
+    const leadData: C2SLeadCreate = {
+      customer: normalizeName(lead.name) || lead.name,
+      phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
+      email: lead.email ? (normalizeEmail(lead.email) ?? undefined) : undefined,
+      description,
+      source: lead.source || "google_ads",
+      product: lead.campaignName,
+    };
+
+    const result = await this.c2sService.createLead(leadData);
+
+    // Don't mark CPF as recently processed - allow re-enrichment later
+    // This ensures we can try again to get full enrichment data
+
+    await this.dbStorage.updateLeadEnrichmentStatus(
+      lead.leadId,
+      "partial",
+      undefined,
+      result.data.id,
+    );
+
+    enrichmentLogger.info(
+      { leadId: lead.leadId, cpf, c2sCustomerId: result.data.id },
+      "Created partial enrichment customer (Work API timeout)",
+    );
+
+    return {
+      success: true,
+      cpf,
+      c2sCustomerId: result.data.id,
+      enriched: false,
+      partialEnrichment: true,
+      message:
+        "Customer created with partial enrichment (Work API timeout - will retry later)",
     };
   }
 }
