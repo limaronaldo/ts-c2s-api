@@ -279,30 +279,52 @@ export class EnrichmentService {
       lead.campaignName,
     );
 
-    const leadData: C2SLeadCreate = {
-      customer: normalizeName(lead.name) || lead.name,
-      phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
-      email: lead.email ? (normalizeEmail(lead.email) ?? undefined) : undefined,
-      description,
-      source: lead.source || "google_ads",
-      product: lead.campaignName,
-    };
+    // Try adding message to existing lead first
+    try {
+      await this.c2sService.createMessage(lead.leadId, description);
 
-    const result = await this.c2sService.createLead(leadData);
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "unenriched",
+        undefined,
+        lead.leadId,
+      );
 
-    await this.dbStorage.updateLeadEnrichmentStatus(
-      lead.leadId,
-      "unenriched",
-      undefined,
-      result.data.id,
-    );
+      return {
+        success: true,
+        c2sCustomerId: lead.leadId,
+        enriched: false,
+        message: "Added note to existing lead (CPF not found)",
+      };
+    } catch {
+      // If message fails, try creating new lead
+      const leadData: C2SLeadCreate = {
+        customer: normalizeName(lead.name) || lead.name,
+        phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
+        email: lead.email
+          ? (normalizeEmail(lead.email) ?? undefined)
+          : undefined,
+        description,
+        source: lead.source || "google_ads",
+        product: lead.campaignName,
+      };
 
-    return {
-      success: true,
-      c2sCustomerId: result.data.id,
-      enriched: false,
-      message: "Customer created without enrichment (CPF not found)",
-    };
+      const result = await this.c2sService.createLead(leadData);
+
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "unenriched",
+        undefined,
+        result.data.id,
+      );
+
+      return {
+        success: true,
+        c2sCustomerId: result.data.id,
+        enriched: false,
+        message: "Customer created without enrichment (CPF not found)",
+      };
+    }
   }
 
   private async createBasicCustomer(
