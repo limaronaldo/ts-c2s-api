@@ -17,7 +17,7 @@ const configSchema = z.object({
 
   // Work API (Completa Buscas)
   WORK_API: z.string().min(1, "WORK_API is required"),
-  WORK_API_URL: z.string().url().default("https://api.completabuscas.com.br"),
+  WORK_API_URL: z.string().url().default("https://completa.workbuscas.com/api"),
 
   // Diretrix API
   DIRETRIX_USER: z.string().min(1, "DIRETRIX_USER is required"),

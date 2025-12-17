@@ -101,12 +101,13 @@ export class WorkApiService {
     try {
       // Use retry logic with exponential backoff for transient failures
       // Reference: Lead Operations Guide - "3 retries max, exponential backoff: 1s, 2s, 4s"
+      // Work API uses query parameters: ?token={token}&modulo=cpf&consulta={cpf}
+      const url = `${this.baseUrl}?token=${this.apiKey}&modulo=cpf&consulta=${cpf}`;
       const response = await withRetry(
         async () => {
-          const res = await fetch(`${this.baseUrl}/v1/pessoa/${cpf}`, {
+          const res = await fetch(url, {
             method: "GET",
             headers: {
-              Authorization: `Bearer ${this.apiKey}`,
               "Content-Type": "application/json",
             },
             signal: controller.signal,
@@ -153,20 +154,75 @@ export class WorkApiService {
         throw new Error(`Work API returned ${response.status}`);
       }
 
-      const data = (await response.json()) as WorkApiResponse;
+      const rawData = await response.json();
 
-      if (!data.success || !data.data) {
+      // Work API returns data directly with DadosBasicos, not wrapped in success/data
+      // Check for error response
+      if (rawData.erro) {
+        workApiLogger.debug(
+          { cpf, error: rawData.erro },
+          "Work API returned error",
+        );
+        return { data: null, timedOut: false };
+      }
+
+      if (!rawData.DadosBasicos) {
         workApiLogger.debug({ cpf }, "Work API returned no data");
         return { data: null, timedOut: false };
       }
 
-      workApiCache.set(cacheKey, data.data);
+      // Transform Work API response to our internal format
+      const person: WorkApiPerson = {
+        cpf,
+        nome: rawData.DadosBasicos.nome || "",
+        dataNascimento: rawData.DadosBasicos.dataNascimento,
+        sexo: rawData.DadosBasicos.sexo,
+        nomeMae: rawData.DadosBasicos.nomeMae,
+        renda: rawData.DadosEconomicos?.renda
+          ? parseFloat(String(rawData.DadosEconomicos.renda).replace(",", "."))
+          : undefined,
+        rendaPresumida: rawData.DadosEconomicos?.rendaPresumida
+          ? parseFloat(
+              String(rawData.DadosEconomicos.rendaPresumida).replace(",", "."),
+            )
+          : undefined,
+        telefones: rawData.telefones?.map(
+          (t: { telefone: string; tipo?: string }) => ({
+            numero: t.telefone,
+            tipo: t.tipo,
+          }),
+        ),
+        emails: rawData.emails?.map((e: { email: string }) => ({
+          email: e.email,
+        })),
+        enderecos: rawData.enderecos?.map(
+          (a: {
+            logradouro?: string;
+            numero?: string;
+            complemento?: string;
+            bairro?: string;
+            cidade?: string;
+            uf?: string;
+            cep?: string;
+          }) => ({
+            logradouro: a.logradouro,
+            numero: a.numero,
+            complemento: a.complemento,
+            bairro: a.bairro,
+            cidade: a.cidade,
+            uf: a.uf,
+            cep: a.cep,
+          }),
+        ),
+      };
+
+      workApiCache.set(cacheKey, person);
       workApiLogger.info(
-        { cpf, name: data.data.nome },
+        { cpf, name: person.nome },
         "Successfully fetched from Work API",
       );
 
-      return { data: data.data, timedOut: false };
+      return { data: person, timedOut: false };
     } catch (error) {
       clearTimeout(timeoutId);
 
