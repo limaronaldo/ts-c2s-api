@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DB_URL=postgresql://postgres:postgres@db:5432/c2s
+      - C2S_TOKEN=${C2S_TOKEN}
+      - C2S_URL=${C2S_URL:-https://c2s.com.br/api/v1}
+      - WORK_API=${WORK_API}
+      - WORK_API_URL=${WORK_API_URL:-https://api.completabuscas.com.br}
+      - DIRETRIX_USER=${DIRETRIX_USER}
+      - DIRETRIX_PASS=${DIRETRIX_PASS}
+      - DIRETRIX_URL=${DIRETRIX_URL:-https://api.diretrix.com.br}
+      - DBASE_TOKEN=${DBASE_TOKEN}
+      - DBASE_URL=${DBASE_URL:-https://dfraud.dfraud.com.br}
+      - MIMIR_TOKEN=${MIMIR_TOKEN}
+      - MIMIR_URL=${MIMIR_URL:-https://ibvi-mimir.azurewebsites.net}
+      - INCOME_MULTIPLIER=${INCOME_MULTIPLIER:-1.9}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=c2s
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

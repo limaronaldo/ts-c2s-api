@@ -1,0 +1,32 @@
+{
+  "name": "ts-c2s-api",
+  "version": "1.0.0",
+  "description": "C2S Lead Enrichment API - TypeScript/Bun/Elysia",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^25.0.3",
+    "bun-types": "^1.3.4",
+    "drizzle-kit": "^0.31.8",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "elysia": "^1.4.19",
+    "pino": "^10.1.0",
+    "postgres": "^3.4.7",
+    "zod": "^4.2.1"
+  }
+}
