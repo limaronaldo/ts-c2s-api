@@ -206,7 +206,13 @@ export class EnrichmentService {
     };
 
     if (person.dataNascimento) {
-      partyData.birthDate = new Date(person.dataNascimento);
+      // Work API returns dates in DD/MM/YYYY format (Brazilian)
+      // Convert to YYYY-MM-DD for proper Date parsing
+      const parts = person.dataNascimento.split("/");
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        partyData.birthDate = new Date(`${year}-${month}-${day}`);
+      }
     }
 
     const party = await this.dbStorage.upsertParty(partyData);
