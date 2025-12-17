@@ -264,19 +264,40 @@ export class EnrichmentService {
     return party;
   }
 
-  private async createEnrichedCustomer(lead: LeadData, person: WorkApiPerson) {
+  private async createEnrichedCustomer(
+    lead: LeadData,
+    person: WorkApiPerson,
+  ): Promise<{ data: { id: string } }> {
     const description = buildDescription(person, lead.campaignName);
 
-    const leadData: C2SLeadCreate = {
-      customer: normalizeName(person.nome) || lead.name,
-      phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
-      email: lead.email ? (normalizeEmail(lead.email) ?? undefined) : undefined,
-      description,
-      source: lead.source || "google_ads",
-      product: lead.campaignName,
-    };
+    // Try adding enrichment message to existing lead first
+    try {
+      await this.c2sService.createMessage(lead.leadId, description);
+      enrichmentLogger.info(
+        { leadId: lead.leadId },
+        "Added enrichment message to existing C2S lead",
+      );
+      return { data: { id: lead.leadId } };
+    } catch {
+      // If message fails, try creating new lead
+      enrichmentLogger.warn(
+        { leadId: lead.leadId },
+        "Failed to add message to existing lead, creating new lead",
+      );
 
-    return this.c2sService.createLead(leadData);
+      const leadData: C2SLeadCreate = {
+        customer: normalizeName(person.nome) || lead.name,
+        phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
+        email: lead.email
+          ? (normalizeEmail(lead.email) ?? undefined)
+          : undefined,
+        description,
+        source: lead.source || "google_ads",
+        product: lead.campaignName,
+      };
+
+      return this.c2sService.createLead(leadData);
+    }
   }
 
   private async createUnenrichedCustomer(
