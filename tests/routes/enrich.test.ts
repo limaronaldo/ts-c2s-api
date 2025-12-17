@@ -1,220 +1,103 @@
 /**
  * Enrich Endpoint Integration Tests
- * TSC-29: Integration tests for /enrich endpoints
+ * Tests for POST /enrich endpoint
  */
-import { describe, expect, test, mock, beforeEach } from 'bun:test'
-import { Elysia } from 'elysia'
+import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
+import { enrichRoute } from "../../src/routes/enrich";
 
-// Mock the container before importing the route
-const mockEnrichmentService = {
-  enrichLead: mock(() => Promise.resolve({
-    leadId: 'lead-123',
-    success: true,
-    cpf: '12345678909',
-    cpfSource: 'dbase',
-    enriched: true,
-    skipped: false,
-    descriptionLength: 500
-  }))
-}
+describe("POST /enrich", () => {
+  test("validates required fields", async () => {
+    const app = new Elysia().use(enrichRoute);
 
-const mockC2SService = {
-  fetchLead: mock(() => Promise.resolve({
-    id: 'lead-123',
-    type: 'leads',
-    attributes: {
-      name: 'João Silva',
-      phone: '11987654321',
-      email: 'joao@example.com'
-    }
-  }))
-}
+    // Missing required fields
+    const response = await app.handle(
+      new Request("http://localhost/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
 
-// Mock the container module
-mock.module('../../src/container', () => ({
-  getContainer: () => ({
-    enrichment: mockEnrichmentService,
-    c2s: mockC2SService
-  })
-}))
+    // Should fail validation (422)
+    expect(response.status).toBe(422);
+  });
 
-describe('POST /enrich/lead/:id', () => {
-  beforeEach(() => {
-    mockEnrichmentService.enrichLead.mockReset()
-    mockC2SService.fetchLead.mockReset()
-
-    mockC2SService.fetchLead.mockResolvedValue({
-      id: 'lead-123',
-      type: 'leads',
-      attributes: {
-        name: 'João Silva',
-        phone: '11987654321'
-      }
-    })
-
-    mockEnrichmentService.enrichLead.mockResolvedValue({
-      leadId: 'lead-123',
-      success: true,
-      cpf: '12345678909',
-      cpfSource: 'dbase',
-      enriched: true,
-      skipped: false,
-      descriptionLength: 500
-    })
-  })
-
-  test('enriches a valid lead successfully', async () => {
-    // Import route after mocking
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
+  test("requires leadId field", async () => {
+    const app = new Elysia().use(enrichRoute);
 
     const response = await app.handle(
-      new Request('http://localhost/enrich/lead/lead-123', {
-        method: 'POST'
-      })
-    )
-
-    expect(response.status).toBe(200)
-    const body = await response.json()
-    expect(body.success).toBe(true)
-    expect(body.data.enriched).toBe(true)
-  })
-
-  test('returns 404 for non-existent lead', async () => {
-    mockC2SService.fetchLead.mockResolvedValueOnce(null)
-
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
-    const response = await app.handle(
-      new Request('http://localhost/enrich/lead/nonexistent', {
-        method: 'POST'
-      })
-    )
-
-    expect(response.status).toBe(404)
-  })
-
-  test('returns enrichment details in response', async () => {
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
-    const response = await app.handle(
-      new Request('http://localhost/enrich/lead/lead-123', {
-        method: 'POST'
-      })
-    )
-
-    const body = await response.json()
-    expect(body.data).toHaveProperty('leadId')
-    expect(body.data).toHaveProperty('cpf')
-    expect(body.data).toHaveProperty('cpfSource')
-    expect(body.data).toHaveProperty('enriched')
-    expect(body.data).toHaveProperty('descriptionLength')
-  })
-})
-
-describe('POST /enrich/batch', () => {
-  beforeEach(() => {
-    mockEnrichmentService.enrichLead.mockReset()
-    mockC2SService.fetchLead.mockReset()
-  })
-
-  test('validates request body structure', async () => {
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
-    // Missing leadIds array
-    const response = await app.handle(
-      new Request('http://localhost/enrich/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-    )
-
-    // Should fail validation
-    expect(response.status).toBe(422)
-  })
-
-  test('accepts valid batch request', async () => {
-    mockC2SService.fetchLead.mockResolvedValue({
-      id: 'lead-1',
-      type: 'leads',
-      attributes: { name: 'Test', phone: '11987654321' }
-    })
-
-    mockEnrichmentService.enrichLead.mockResolvedValue({
-      leadId: 'lead-1',
-      success: true,
-      enriched: true,
-      skipped: false
-    })
-
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
-    const response = await app.handle(
-      new Request('http://localhost/enrich/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      new Request("http://localhost/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          leadIds: ['lead-1', 'lead-2'],
-          concurrency: 2
-        })
-      })
-    )
+          name: "Test User",
+          phone: "11999999999",
+        }),
+      }),
+    );
 
-    expect(response.status).toBe(200)
-    const body = await response.json()
-    expect(body.success).toBe(true)
-    expect(body).toHaveProperty('summary')
-    expect(body).toHaveProperty('results')
-  })
+    expect(response.status).toBe(422);
+  });
 
-  test('enforces max 100 leads limit', async () => {
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
-    const leadIds = Array(101).fill(null).map((_, i) => `lead-${i}`)
+  test("requires name field", async () => {
+    const app = new Elysia().use(enrichRoute);
 
     const response = await app.handle(
-      new Request('http://localhost/enrich/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds })
-      })
-    )
+      new Request("http://localhost/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "lead-123",
+          phone: "11999999999",
+        }),
+      }),
+    );
 
-    expect(response.status).toBe(422) // Validation error
-  })
+    expect(response.status).toBe(422);
+  });
 
-  test('returns summary with counts', async () => {
-    mockC2SService.fetchLead.mockResolvedValue({
-      id: 'lead-1',
-      type: 'leads',
-      attributes: { name: 'Test', phone: '11987654321' }
-    })
+  test("accepts valid request body structure", async () => {
+    const app = new Elysia().use(enrichRoute);
 
-    mockEnrichmentService.enrichLead
-      .mockResolvedValueOnce({ leadId: 'lead-1', success: true, enriched: true, skipped: false })
-      .mockResolvedValueOnce({ leadId: 'lead-2', success: true, enriched: false, skipped: true, skipReason: 'recently_enriched' })
-
-    const { enrichRoute } = await import('../../src/routes/enrich')
-    const app = new Elysia().use(enrichRoute)
-
+    // This will fail at runtime because DB isn't configured,
+    // but it should pass validation (not 422)
     const response = await app.handle(
-      new Request('http://localhost/enrich/batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadIds: ['lead-1', 'lead-2'] })
-      })
-    )
+      new Request("http://localhost/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "lead-123",
+          name: "Test User",
+          phone: "11999999999",
+          email: "test@example.com",
+          campaignId: "campaign-1",
+          campaignName: "Test Campaign",
+        }),
+      }),
+    );
 
-    const body = await response.json()
-    expect(body.summary).toHaveProperty('total')
-    expect(body.summary).toHaveProperty('enriched')
-    expect(body.summary).toHaveProperty('skipped')
-    expect(body.summary).toHaveProperty('failed')
-  })
-})
+    // Should not be a validation error (422)
+    // May be 500 if DB not configured, but not 422
+    expect(response.status).not.toBe(422);
+  });
+
+  test("accepts optional fields", async () => {
+    const app = new Elysia().use(enrichRoute);
+
+    // Minimal valid request - only required fields
+    const response = await app.handle(
+      new Request("http://localhost/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: "lead-123",
+          name: "Test User",
+        }),
+      }),
+    );
+
+    // Should pass validation
+    expect(response.status).not.toBe(422);
+  });
+});

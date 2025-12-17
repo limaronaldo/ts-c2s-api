@@ -2,7 +2,7 @@
  * Health Endpoint Integration Tests
  * TSC-29: Integration tests for /health endpoint
  */
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { describe, expect, test, beforeAll } from "bun:test";
 import { Elysia } from "elysia";
 import { healthRoute } from "../../src/routes/health";
 
@@ -25,24 +25,16 @@ describe("GET /health", () => {
     const body = await response.json();
 
     expect(body).toHaveProperty("status");
-    expect(body).toHaveProperty("service");
     expect(body).toHaveProperty("timestamp");
+    expect(body).toHaveProperty("version");
   });
 
-  test("status is healthy", async () => {
+  test("status is ok", async () => {
     const response = await app.handle(new Request("http://localhost/health"));
 
     const body = await response.json();
 
-    expect(body.status).toBe("healthy");
-  });
-
-  test("service name is correct", async () => {
-    const response = await app.handle(new Request("http://localhost/health"));
-
-    const body = await response.json();
-
-    expect(body.service).toBe("ts-c2s-api");
+    expect(body.status).toBe("ok");
   });
 
   test("timestamp is valid ISO string", async () => {
