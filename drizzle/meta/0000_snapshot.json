@@ -1,0 +1,613 @@
+{
+  "id": "a44c8c04-5257-4c40-b24b-2f477b79a08b",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "5",
+  "dialect": "pg",
+  "tables": {
+    "addresses": {
+      "name": "addresses",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "party_id": {
+          "name": "party_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "street": {
+          "name": "street",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "number": {
+          "name": "number",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "complement": {
+          "name": "complement",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "neighborhood": {
+          "name": "neighborhood",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "varchar(2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "zip_code": {
+          "name": "zip_code",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_addresses_party": {
+          "name": "idx_addresses_party",
+          "columns": [
+            "party_id"
+          ],
+          "isUnique": false
+        },
+        "idx_addresses_city_state": {
+          "name": "idx_addresses_city_state",
+          "columns": [
+            "city",
+            "state"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "addresses_party_id_parties_id_fk": {
+          "name": "addresses_party_id_parties_id_fk",
+          "tableFrom": "addresses",
+          "tableTo": "parties",
+          "columnsFrom": [
+            "party_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "google_ads_leads": {
+      "name": "google_ads_leads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "lead_id": {
+          "name": "lead_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "campaign_id": {
+          "name": "campaign_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "campaign_name": {
+          "name": "campaign_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ad_group_id": {
+          "name": "ad_group_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ad_group_name": {
+          "name": "ad_group_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "form_id": {
+          "name": "form_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "form_name": {
+          "name": "form_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gclid_value": {
+          "name": "gclid_value",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "raw_data": {
+          "name": "raw_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "party_id": {
+          "name": "party_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "c2s_customer_id": {
+          "name": "c2s_customer_id",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enrichment_status": {
+          "name": "enrichment_status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "enriched_at": {
+          "name": "enriched_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_google_ads_leads_lead_id": {
+          "name": "idx_google_ads_leads_lead_id",
+          "columns": [
+            "lead_id"
+          ],
+          "isUnique": true
+        },
+        "idx_google_ads_leads_campaign": {
+          "name": "idx_google_ads_leads_campaign",
+          "columns": [
+            "campaign_id"
+          ],
+          "isUnique": false
+        },
+        "idx_google_ads_leads_status": {
+          "name": "idx_google_ads_leads_status",
+          "columns": [
+            "enrichment_status"
+          ],
+          "isUnique": false
+        },
+        "idx_google_ads_leads_party": {
+          "name": "idx_google_ads_leads_party",
+          "columns": [
+            "party_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "google_ads_leads_party_id_parties_id_fk": {
+          "name": "google_ads_leads_party_id_parties_id_fk",
+          "tableFrom": "google_ads_leads",
+          "tableTo": "parties",
+          "columnsFrom": [
+            "party_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "google_ads_leads_lead_id_unique": {
+          "name": "google_ads_leads_lead_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "lead_id"
+          ]
+        }
+      }
+    },
+    "parties": {
+      "name": "parties",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cpf_cnpj": {
+          "name": "cpf_cnpj",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "trade_name": {
+          "name": "trade_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "birth_date": {
+          "name": "birth_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gender": {
+          "name": "gender",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "mother_name": {
+          "name": "mother_name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "income": {
+          "name": "income",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "net_worth": {
+          "name": "net_worth",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "occupation": {
+          "name": "occupation",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "education_level": {
+          "name": "education_level",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "marital_status": {
+          "name": "marital_status",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_parties_cpf_cnpj": {
+          "name": "idx_parties_cpf_cnpj",
+          "columns": [
+            "cpf_cnpj"
+          ],
+          "isUnique": false
+        },
+        "idx_parties_type": {
+          "name": "idx_parties_type",
+          "columns": [
+            "type"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "parties_cpf_cnpj_unique": {
+          "name": "parties_cpf_cnpj_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "cpf_cnpj"
+          ]
+        }
+      }
+    },
+    "party_contacts": {
+      "name": "party_contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "party_id": {
+          "name": "party_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_primary": {
+          "name": "is_primary",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "is_verified": {
+          "name": "is_verified",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_party_contacts_party": {
+          "name": "idx_party_contacts_party",
+          "columns": [
+            "party_id"
+          ],
+          "isUnique": false
+        },
+        "idx_party_contacts_value": {
+          "name": "idx_party_contacts_value",
+          "columns": [
+            "value"
+          ],
+          "isUnique": false
+        },
+        "idx_party_contacts_unique": {
+          "name": "idx_party_contacts_unique",
+          "columns": [
+            "party_id",
+            "type",
+            "value"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "party_contacts_party_id_parties_id_fk": {
+          "name": "party_contacts_party_id_parties_id_fk",
+          "tableFrom": "party_contacts",
+          "tableTo": "parties",
+          "columnsFrom": [
+            "party_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "webhook_events": {
+      "name": "webhook_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "processed_at": {
+          "name": "processed_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_webhook_events_external": {
+          "name": "idx_webhook_events_external",
+          "columns": [
+            "external_id"
+          ],
+          "isUnique": true
+        },
+        "idx_webhook_events_status": {
+          "name": "idx_webhook_events_status",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "idx_webhook_events_source": {
+          "name": "idx_webhook_events_source",
+          "columns": [
+            "source"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "webhook_events_external_id_unique": {
+          "name": "webhook_events_external_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_id"
+          ]
+        }
+      }
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
