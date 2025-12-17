@@ -192,11 +192,15 @@ export class EnrichmentService {
     cpf: string,
   ): Promise<{ id: string }> {
     // Create/update party
+    // Normalize gender: Work API returns "M - MASCULINO" or "F - FEMININO"
+    // Extract just the first character (M or F) to fit varchar(10)
+    const normalizedGender = person.sexo ? person.sexo.charAt(0) : undefined;
+
     const partyData: NewParty = {
       type: "person",
       cpfCnpj: normalizeCpf(cpf),
       name: normalizeName(person.nome),
-      gender: person.sexo,
+      gender: normalizedGender,
       motherName: person.nomeMae,
       income: normalizeIncome(person.renda, this.incomeMultiplier)?.toString(),
       netWorth: person.patrimonio?.toString(),
