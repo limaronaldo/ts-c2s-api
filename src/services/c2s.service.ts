@@ -1,226 +1,480 @@
-import { getConfig } from '../config'
-import { c2sLogger } from '../utils/logger'
-import { AppError } from '../errors/app-error'
+import { getConfig } from "../config";
+import { c2sLogger } from "../utils/logger";
+import { AppError } from "../errors/app-error";
 
-// JSON:API format for C2S
-export interface C2SCustomerAttributes {
-  name: string
-  email?: string
-  phone?: string
-  cpf?: string
-  description?: string
-  source?: string
-  campaign?: string
-  custom_fields?: Record<string, unknown>
+// C2S Lead format (matching /integration/leads API)
+// See: https://api.contact2sale.com/integration/leads
+export interface C2SLeadCreate {
+  customer: string; // Customer name (required)
+  phone?: string;
+  email?: string;
+  product?: string;
+  description?: string;
+  source?: string;
+  seller_id?: string;
 }
 
-export interface C2SCustomerRequest {
-  data: {
-    type: 'customers'
-    attributes: C2SCustomerAttributes
-  }
+export interface C2SLeadUpdate {
+  customer?: string;
+  phone?: string;
+  email?: string;
+  product?: string;
+  description?: string;
+  source?: string;
+  status?: string;
 }
 
-export interface C2SCustomerResponse {
-  data: {
-    id: string
-    type: 'customers'
-    attributes: C2SCustomerAttributes & {
-      created_at: string
-      updated_at: string
-    }
-  }
+export interface C2SLead {
+  id: string;
+  customer: string;
+  phone?: string;
+  email?: string;
+  product?: string;
+  description?: string;
+  source?: string;
+  status: string;
+  seller_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface C2SSearchResponse {
-  data: Array<{
-    id: string
-    type: 'customers'
-    attributes: C2SCustomerAttributes & {
-      created_at: string
-      updated_at: string
-    }
-  }>
+export interface C2SLeadResponse {
+  data: C2SLead;
+}
+
+export interface C2SLeadsResponse {
+  data: C2SLead[];
   meta?: {
-    total: number
-    page: number
-    per_page: number
-  }
+    total: number;
+    page: number;
+    perpage: number;
+  };
+}
+
+export interface C2SMessageCreate {
+  message: string;
+  type?: string;
+}
+
+export interface C2SDoneDeal {
+  value: number;
+  description?: string;
+}
+
+export interface C2SVisitCreate {
+  visit_date: string;
+  description?: string;
+}
+
+export interface C2SActivityCreate {
+  type: string;
+  description: string;
+  date?: string;
 }
 
 /**
  * C2S API Service
- * Uses JSON:API format with application/vnd.api+json content type
+ * Uses /integration/* endpoints as documented
+ * Port of c2s-gateway Python client to TypeScript
  */
 export class C2SService {
-  private readonly token: string
-  private readonly baseUrl: string
+  private readonly token: string;
+  private readonly baseUrl: string;
 
   constructor() {
-    const config = getConfig()
-    this.token = config.C2S_TOKEN
-    this.baseUrl = config.C2S_URL
+    const config = getConfig();
+    this.token = config.C2S_TOKEN;
+    this.baseUrl = config.C2S_URL;
   }
 
   private getHeaders(): HeadersInit {
     return {
       Authorization: `Bearer ${this.token}`,
-      'Content-Type': 'application/vnd.api+json',
-      Accept: 'application/vnd.api+json',
+      "Content-Type": "application/json",
+    };
+  }
+
+  private async request<T>(
+    method: string,
+    endpoint: string,
+    params?: Record<string, string>,
+    body?: unknown,
+  ): Promise<T> {
+    let url = `${this.baseUrl}${endpoint}`;
+
+    if (params && Object.keys(params).length > 0) {
+      const searchParams = new URLSearchParams(params);
+      url += `?${searchParams.toString()}`;
+    }
+
+    c2sLogger.debug({ method, url, body }, "C2S API request");
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: this.getHeaders(),
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        c2sLogger.error(
+          { status: response.status, body: errorBody, url },
+          "C2S API error",
+        );
+        throw new Error(`C2S returned ${response.status}: ${errorBody}`);
+      }
+
+      const data = await response.json();
+      return data as T;
+    } catch (error) {
+      c2sLogger.error({ error, url }, "C2S API request failed");
+      throw AppError.serviceUnavailable("C2S");
     }
   }
 
-  async createCustomer(attributes: C2SCustomerAttributes): Promise<C2SCustomerResponse> {
-    c2sLogger.info({ name: attributes.name, phone: attributes.phone }, 'Creating customer in C2S')
+  // ========== LEADS MANAGEMENT ==========
 
-    const payload: C2SCustomerRequest = {
-      data: {
-        type: 'customers',
-        attributes,
+  async getLeads(
+    options: {
+      page?: number;
+      perpage?: number;
+      sort?: string;
+      created_gte?: string;
+      created_lt?: string;
+      updated_gte?: string;
+      updated_lt?: string;
+      status?: string;
+      phone?: string;
+      email?: string;
+      tags?: string;
+    } = {},
+  ): Promise<C2SLeadsResponse> {
+    const params: Record<string, string> = {};
+
+    if (options.page) params.page = String(options.page);
+    if (options.perpage) params.perpage = String(Math.min(options.perpage, 50));
+    if (options.sort) params.sort = options.sort;
+    if (options.created_gte) params.created_gte = options.created_gte;
+    if (options.created_lt) params.created_lt = options.created_lt;
+    if (options.updated_gte) params.updated_gte = options.updated_gte;
+    if (options.updated_lt) params.updated_lt = options.updated_lt;
+    if (options.status) params.status = options.status;
+    if (options.phone) params.phone = options.phone;
+    if (options.email) params.email = options.email;
+    if (options.tags) params.tags = options.tags;
+
+    return this.request<C2SLeadsResponse>("GET", "/integration/leads", params);
+  }
+
+  async getLead(leadId: string): Promise<C2SLeadResponse> {
+    return this.request<C2SLeadResponse>("GET", `/integration/leads/${leadId}`);
+  }
+
+  async createLead(lead: C2SLeadCreate): Promise<C2SLeadResponse> {
+    c2sLogger.info(
+      { customer: lead.customer, phone: lead.phone },
+      "Creating lead in C2S",
+    );
+
+    const response = await this.request<C2SLeadResponse>(
+      "POST",
+      "/integration/leads",
+      undefined,
+      lead,
+    );
+    c2sLogger.info(
+      { leadId: response.data.id, customer: lead.customer },
+      "Successfully created lead in C2S",
+    );
+
+    return response;
+  }
+
+  async updateLead(
+    leadId: string,
+    lead: C2SLeadUpdate,
+  ): Promise<C2SLeadResponse> {
+    c2sLogger.info({ leadId }, "Updating lead in C2S");
+    return this.request<C2SLeadResponse>(
+      "PATCH",
+      `/integration/leads/${leadId}`,
+      undefined,
+      lead,
+    );
+  }
+
+  async forwardLead(
+    leadId: string,
+    sellerId: string,
+  ): Promise<C2SLeadResponse> {
+    c2sLogger.info({ leadId, sellerId }, "Forwarding lead in C2S");
+    return this.request<C2SLeadResponse>(
+      "PATCH",
+      `/integration/leads/${leadId}/forward`,
+      undefined,
+      { seller_id: sellerId },
+    );
+  }
+
+  // ========== LEAD TAGS ==========
+
+  async getLeadTags(
+    leadId: string,
+  ): Promise<{ data: Array<{ id: string; name: string }> }> {
+    return this.request("GET", `/integration/leads/${leadId}/tags`);
+  }
+
+  async addLeadTag(leadId: string, tagId: string): Promise<unknown> {
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/create_tag`,
+      undefined,
+      { tag_id: tagId },
+    );
+  }
+
+  // ========== LEAD INTERACTIONS ==========
+
+  async markLeadAsInteracted(leadId: string): Promise<unknown> {
+    c2sLogger.info({ leadId }, "Marking lead as interacted");
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/mark_as_interacted`,
+    );
+  }
+
+  async createMessage(
+    leadId: string,
+    message: string,
+    type?: string,
+  ): Promise<unknown> {
+    c2sLogger.info({ leadId }, "Adding message to lead");
+    const body: C2SMessageCreate = { message };
+    if (type) body.type = type;
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/create_message`,
+      undefined,
+      body,
+    );
+  }
+
+  async markDoneDeal(
+    leadId: string,
+    value: number,
+    description?: string,
+  ): Promise<unknown> {
+    c2sLogger.info({ leadId, value }, "Marking lead as done deal");
+    const body: C2SDoneDeal = { value };
+    if (description) body.description = description;
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/done_deal`,
+      undefined,
+      body,
+    );
+  }
+
+  async createVisit(
+    leadId: string,
+    visitDate: string,
+    description?: string,
+  ): Promise<unknown> {
+    c2sLogger.info({ leadId, visitDate }, "Creating visit for lead");
+    const body: C2SVisitCreate = { visit_date: visitDate };
+    if (description) body.description = description;
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/create_visit`,
+      undefined,
+      body,
+    );
+  }
+
+  async createActivity(
+    leadId: string,
+    activityType: string,
+    description: string,
+    date?: string,
+  ): Promise<unknown> {
+    c2sLogger.info({ leadId, activityType }, "Creating activity for lead");
+    const body: C2SActivityCreate = { type: activityType, description };
+    if (date) body.date = date;
+    return this.request(
+      "POST",
+      `/integration/leads/${leadId}/create_activity`,
+      undefined,
+      body,
+    );
+  }
+
+  // ========== TAGS MANAGEMENT ==========
+
+  async getTags(
+    name?: string,
+    autofill?: boolean,
+  ): Promise<{ data: Array<{ id: string; name: string }> }> {
+    const params: Record<string, string> = {};
+    if (name) params.name = name;
+    if (autofill !== undefined) params.autofill = String(autofill);
+    return this.request("GET", "/integration/tags", params);
+  }
+
+  async createTag(tagData: { name: string; color?: string }): Promise<unknown> {
+    return this.request("POST", "/integration/tags", undefined, tagData);
+  }
+
+  // ========== SELLERS MANAGEMENT ==========
+
+  async getSellers(): Promise<{
+    data: Array<{ id: string; name: string; email: string }>;
+  }> {
+    return this.request("GET", "/integration/sellers");
+  }
+
+  async createSeller(sellerData: {
+    name: string;
+    email: string;
+  }): Promise<unknown> {
+    return this.request("POST", "/integration/sellers", undefined, sellerData);
+  }
+
+  async updateSeller(
+    sellerId: string,
+    sellerData: { name?: string; email?: string },
+  ): Promise<unknown> {
+    return this.request(
+      "PUT",
+      `/integration/sellers/${sellerId}`,
+      undefined,
+      sellerData,
+    );
+  }
+
+  // ========== DISTRIBUTION QUEUES ==========
+
+  async getDistributionQueues(): Promise<{
+    data: Array<{ id: string; name: string }>;
+  }> {
+    return this.request("GET", "/integration/distribution_queues");
+  }
+
+  async redistributeLead(
+    queueId: string,
+    leadId: string,
+    sellerId: string,
+  ): Promise<unknown> {
+    return this.request(
+      "POST",
+      `/integration/distribution_queues/${queueId}/redistribute`,
+      undefined,
+      {
+        lead_id: leadId,
+        seller_id: sellerId,
       },
-    }
-
-    try {
-      const response = await fetch(`${this.baseUrl}/customers`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.text()
-        c2sLogger.error({ status: response.status, body: errorBody }, 'Failed to create customer in C2S')
-        throw new Error(`C2S returned ${response.status}: ${errorBody}`)
-      }
-
-      const data = (await response.json()) as C2SCustomerResponse
-      c2sLogger.info({ customerId: data.data.id, name: attributes.name }, 'Successfully created customer in C2S')
-
-      return data
-    } catch (error) {
-      c2sLogger.error({ error, attributes }, 'Failed to create customer in C2S')
-      throw AppError.serviceUnavailable('C2S')
-    }
+    );
   }
 
-  async updateCustomer(customerId: string, attributes: Partial<C2SCustomerAttributes>): Promise<C2SCustomerResponse> {
-    c2sLogger.info({ customerId }, 'Updating customer in C2S')
+  async getQueueSellers(
+    queueId: string,
+  ): Promise<{ data: Array<{ id: string; name: string; priority: number }> }> {
+    return this.request(
+      "GET",
+      `/integration/distribution_queues/${queueId}/sellers`,
+    );
+  }
 
-    const payload = {
-      data: {
-        type: 'customers',
-        id: customerId,
-        attributes,
+  async updateSellerPriority(
+    queueId: string,
+    sellerId: string,
+    priority: number,
+  ): Promise<unknown> {
+    return this.request(
+      "POST",
+      `/integration/distribution_queues/${queueId}/priority`,
+      undefined,
+      {
+        seller_id: sellerId,
+        priority,
       },
-    }
+    );
+  }
 
+  async setNextSeller(queueId: string, sellerId: string): Promise<unknown> {
+    return this.request(
+      "POST",
+      `/integration/distribution_queues/${queueId}/next_seller`,
+      undefined,
+      {
+        seller_id: sellerId,
+      },
+    );
+  }
+
+  async createDistributionRule(
+    ruleData: Record<string, unknown>,
+  ): Promise<unknown> {
+    return this.request(
+      "POST",
+      "/integration/distribution_rules",
+      undefined,
+      ruleData,
+    );
+  }
+
+  // ========== COMPANY INFO ==========
+
+  async getCompanyInfo(): Promise<{ data: Record<string, unknown> }> {
+    return this.request("GET", "/integration/me");
+  }
+
+  // ========== WEBHOOKS ==========
+
+  async subscribeWebhook(
+    webhookUrl: string,
+    events: string[],
+  ): Promise<unknown> {
+    return this.request(
+      "POST",
+      "/integration/webhook/leads/subscribe",
+      undefined,
+      {
+        url: webhookUrl,
+        events,
+      },
+    );
+  }
+
+  async unsubscribeWebhook(webhookUrl: string): Promise<unknown> {
+    return this.request(
+      "POST",
+      "/integration/webhook/leads/unsubscribe",
+      undefined,
+      {
+        url: webhookUrl,
+      },
+    );
+  }
+
+  // ========== LEGACY COMPATIBILITY ==========
+  // These methods maintain backward compatibility with the old service interface
+
+  async findLeadByPhone(phone: string): Promise<C2SLead | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers/${customerId}`, {
-        method: 'PATCH',
-        headers: this.getHeaders(),
-        body: JSON.stringify(payload),
-      })
-
-      if (!response.ok) {
-        const errorBody = await response.text()
-        c2sLogger.error({ status: response.status, body: errorBody }, 'Failed to update customer in C2S')
-        throw new Error(`C2S returned ${response.status}: ${errorBody}`)
-      }
-
-      const data = (await response.json()) as C2SCustomerResponse
-      c2sLogger.info({ customerId }, 'Successfully updated customer in C2S')
-
-      return data
-    } catch (error) {
-      c2sLogger.error({ error, customerId }, 'Failed to update customer in C2S')
-      throw AppError.serviceUnavailable('C2S')
+      const response = await this.getLeads({ phone, perpage: 1 });
+      return response.data?.[0] || null;
+    } catch {
+      return null;
     }
   }
 
-  async findCustomerByPhone(phone: string): Promise<C2SCustomerResponse['data'] | null> {
-    c2sLogger.debug({ phone }, 'Searching for customer by phone in C2S')
-
+  async findLeadByEmail(email: string): Promise<C2SLead | null> {
     try {
-      const response = await fetch(`${this.baseUrl}/customers?filter[phone]=${encodeURIComponent(phone)}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null
-        }
-        throw new Error(`C2S returned ${response.status}`)
-      }
-
-      const data = (await response.json()) as C2SSearchResponse
-
-      if (!data.data || data.data.length === 0) {
-        return null
-      }
-
-      return data.data[0]
-    } catch (error) {
-      c2sLogger.error({ error, phone }, 'Failed to search customer in C2S')
-      throw AppError.serviceUnavailable('C2S')
-    }
-  }
-
-  async findCustomerByEmail(email: string): Promise<C2SCustomerResponse['data'] | null> {
-    c2sLogger.debug({ email }, 'Searching for customer by email in C2S')
-
-    try {
-      const response = await fetch(`${this.baseUrl}/customers?filter[email]=${encodeURIComponent(email)}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null
-        }
-        throw new Error(`C2S returned ${response.status}`)
-      }
-
-      const data = (await response.json()) as C2SSearchResponse
-
-      if (!data.data || data.data.length === 0) {
-        return null
-      }
-
-      return data.data[0]
-    } catch (error) {
-      c2sLogger.error({ error, email }, 'Failed to search customer in C2S')
-      throw AppError.serviceUnavailable('C2S')
-    }
-  }
-
-  async findCustomerByCpf(cpf: string): Promise<C2SCustomerResponse['data'] | null> {
-    c2sLogger.debug({ cpf }, 'Searching for customer by CPF in C2S')
-
-    try {
-      const response = await fetch(`${this.baseUrl}/customers?filter[cpf]=${encodeURIComponent(cpf)}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null
-        }
-        throw new Error(`C2S returned ${response.status}`)
-      }
-
-      const data = (await response.json()) as C2SSearchResponse
-
-      if (!data.data || data.data.length === 0) {
-        return null
-      }
-
-      return data.data[0]
-    } catch (error) {
-      c2sLogger.error({ error, cpf }, 'Failed to search customer in C2S')
-      throw AppError.serviceUnavailable('C2S')
+      const response = await this.getLeads({ email, perpage: 1 });
+      return response.data?.[0] || null;
+    } catch {
+      return null;
     }
   }
 }
