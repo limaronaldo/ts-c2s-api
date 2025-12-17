@@ -363,40 +363,72 @@ export class EnrichmentService {
       lead.campaignName,
     );
 
-    const leadData: C2SLeadCreate = {
-      customer: normalizeName(lead.name) || lead.name,
-      phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
-      email: lead.email ? (normalizeEmail(lead.email) ?? undefined) : undefined,
-      description,
-      source: lead.source || "google_ads",
-      product: lead.campaignName,
-    };
+    // For existing C2S leads (like from the last 25), add a message instead of creating new
+    // The leadId from C2S is the actual C2S lead ID
+    try {
+      await this.c2sService.createMessage(lead.leadId, description);
 
-    const result = await this.c2sService.createLead(leadData);
+      enrichmentLogger.info(
+        { leadId: lead.leadId, cpf },
+        "Added partial enrichment message to existing C2S lead",
+      );
 
-    // Don't mark CPF as recently processed - allow re-enrichment later
-    // This ensures we can try again to get full enrichment data
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "partial",
+        undefined,
+        lead.leadId,
+      );
 
-    await this.dbStorage.updateLeadEnrichmentStatus(
-      lead.leadId,
-      "partial",
-      undefined,
-      result.data.id,
-    );
+      return {
+        success: true,
+        cpf,
+        c2sCustomerId: lead.leadId,
+        enriched: false,
+        partialEnrichment: true,
+        message:
+          "Added partial enrichment to existing lead (Work API unavailable)",
+      };
+    } catch {
+      // If adding message fails, try creating new lead
+      enrichmentLogger.warn(
+        { leadId: lead.leadId },
+        "Failed to add message, attempting to create new lead",
+      );
 
-    enrichmentLogger.info(
-      { leadId: lead.leadId, cpf, c2sCustomerId: result.data.id },
-      "Created partial enrichment customer (Work API timeout)",
-    );
+      const leadData: C2SLeadCreate = {
+        customer: normalizeName(lead.name) || lead.name,
+        phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
+        email: lead.email
+          ? (normalizeEmail(lead.email) ?? undefined)
+          : undefined,
+        description,
+        source: lead.source || "google_ads",
+        product: lead.campaignName,
+      };
 
-    return {
-      success: true,
-      cpf,
-      c2sCustomerId: result.data.id,
-      enriched: false,
-      partialEnrichment: true,
-      message:
-        "Customer created with partial enrichment (Work API timeout - will retry later)",
-    };
+      const result = await this.c2sService.createLead(leadData);
+
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "partial",
+        undefined,
+        result.data.id,
+      );
+
+      enrichmentLogger.info(
+        { leadId: lead.leadId, cpf, c2sCustomerId: result.data.id },
+        "Created partial enrichment customer (Work API timeout)",
+      );
+
+      return {
+        success: true,
+        cpf,
+        c2sCustomerId: result.data.id,
+        enriched: false,
+        partialEnrichment: true,
+        message: "Customer created with partial enrichment (Work API timeout)",
+      };
+    }
   }
 }
