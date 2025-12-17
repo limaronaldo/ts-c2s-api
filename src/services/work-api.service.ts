@@ -61,7 +61,8 @@ export class WorkApiService {
   private readonly baseUrl: string;
 
   // Timeout configuration - prevents hanging requests
-  private readonly TIMEOUT_MS = 15000; // 15 seconds
+  // Increased to 30s due to slower connectivity from Fly.io to Work API
+  private readonly TIMEOUT_MS = 30000; // 30 seconds
 
   constructor() {
     const config = getConfig();
