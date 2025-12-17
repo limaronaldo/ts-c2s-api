@@ -1,48 +1,98 @@
+/**
+ * Phone Validation Utilities Tests
+ * TSC-28: Unit tests for phone utilities
+ */
 import { describe, expect, test } from 'bun:test'
-import { normalizePhone, formatPhone, isValidPhone, formatPhoneWithCountryCode } from '../../src/utils/phone'
+import { validateBrazilianPhone, normalizePhone, formatPhone } from '../../src/utils/phone'
+
+describe('validateBrazilianPhone', () => {
+  test('validates mobile number with 11 digits', () => {
+    const result = validateBrazilianPhone('11987654321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('11987654321')
+    expect(result.isMobile).toBe(true)
+    expect(result.countryCode).toBe('55')
+  })
+
+  test('validates landline number with 10 digits', () => {
+    const result = validateBrazilianPhone('1132654321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('1132654321')
+    expect(result.isMobile).toBe(false)
+  })
+
+  test('validates number with +55 prefix', () => {
+    const result = validateBrazilianPhone('+5511987654321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('11987654321')
+  })
+
+  test('validates number with 55 prefix (no +)', () => {
+    const result = validateBrazilianPhone('5511987654321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('11987654321')
+  })
+
+  test('validates formatted number with parentheses and dashes', () => {
+    const result = validateBrazilianPhone('(11) 98765-4321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('11987654321')
+  })
+
+  test('rejects too short number', () => {
+    const result = validateBrazilianPhone('123456')
+    expect(result.isValid).toBe(false)
+    expect(result.normalized).toBeNull()
+  })
+
+  test('rejects empty string', () => {
+    const result = validateBrazilianPhone('')
+    expect(result.isValid).toBe(false)
+  })
+
+  test('handles number with spaces', () => {
+    const result = validateBrazilianPhone('11 9 8765 4321')
+    expect(result.isValid).toBe(true)
+    expect(result.normalized).toBe('11987654321')
+  })
+})
 
 describe('normalizePhone', () => {
   test('removes country code 55', () => {
-    expect(normalizePhone('5511999998888')).toBe('11999998888')
-    expect(normalizePhone('55 11 99999-8888')).toBe('11999998888')
+    expect(normalizePhone('5511987654321')).toBe('11987654321')
   })
 
-  test('removes non-digit characters', () => {
-    expect(normalizePhone('(11) 99999-8888')).toBe('11999998888')
-    expect(normalizePhone('11.99999.8888')).toBe('11999998888')
+  test('removes +55 prefix', () => {
+    expect(normalizePhone('+5511987654321')).toBe('11987654321')
   })
 
-  test('keeps number without country code', () => {
-    expect(normalizePhone('11999998888')).toBe('11999998888')
-    expect(normalizePhone('1133334444')).toBe('1133334444')
+  test('removes formatting characters', () => {
+    expect(normalizePhone('(11) 98765-4321')).toBe('11987654321')
+  })
+
+  test('keeps number without country code unchanged', () => {
+    expect(normalizePhone('11987654321')).toBe('11987654321')
+  })
+
+  test('handles landline number', () => {
+    expect(normalizePhone('1132654321')).toBe('1132654321')
   })
 })
 
 describe('formatPhone', () => {
-  test('formats mobile number', () => {
-    expect(formatPhone('11999998888')).toBe('(11) 99999-8888')
+  test('formats mobile number (11 digits)', () => {
+    expect(formatPhone('11987654321')).toBe('(11) 98765-4321')
   })
 
-  test('formats landline number', () => {
-    expect(formatPhone('1133334444')).toBe('(11) 3333-4444')
-  })
-})
-
-describe('isValidPhone', () => {
-  test('validates correct phone numbers', () => {
-    expect(isValidPhone('11999998888')).toBe(true)
-    expect(isValidPhone('1133334444')).toBe(true)
+  test('formats landline number (10 digits)', () => {
+    expect(formatPhone('1132654321')).toBe('(11) 3265-4321')
   })
 
-  test('rejects invalid phone numbers', () => {
-    expect(isValidPhone('123')).toBe(false)
-    expect(isValidPhone('123456789012')).toBe(false)
+  test('handles already formatted input', () => {
+    expect(formatPhone('(11) 98765-4321')).toBe('(11) 98765-4321')
   })
-})
 
-describe('formatPhoneWithCountryCode', () => {
-  test('adds country code 55', () => {
-    expect(formatPhoneWithCountryCode('11999998888')).toBe('5511999998888')
-    expect(formatPhoneWithCountryCode('5511999998888')).toBe('5511999998888')
+  test('returns original for invalid length', () => {
+    expect(formatPhone('123')).toBe('123')
   })
 })

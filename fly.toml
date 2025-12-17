@@ -1,3 +1,5 @@
+# fly.toml - Fly.io deployment configuration
+# TSC-31: Fly.io Deployment Configuration
 app = "ts-c2s-api"
 primary_region = "gru"
 
@@ -7,15 +9,19 @@ primary_region = "gru"
 [env]
   NODE_ENV = "production"
   PORT = "3000"
-  HOST = "0.0.0.0"
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 1
   processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
 
 [[http_service.checks]]
   grace_period = "10s"
@@ -25,6 +31,6 @@ primary_region = "gru"
   timeout = "5s"
 
 [[vm]]
-  memory = "512mb"
   cpu_kind = "shared"
   cpus = 1
+  memory_mb = 512

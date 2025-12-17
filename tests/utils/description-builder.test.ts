@@ -1,78 +1,167 @@
+/**
+ * Description Builder Tests
+ * TSC-28: Unit tests for enrichment description builder
+ */
 import { describe, expect, test } from 'bun:test'
-import { buildDescription, buildSimpleDescription } from '../../src/utils/description-builder'
-import type { WorkApiPerson } from '../../src/services/work-api.service'
+import { buildEnrichmentDescription } from '../../src/utils/description-builder'
+import type { WorkApiResponse } from '../../src/services/work-api.service'
 
-describe('buildDescription', () => {
-  test('builds description with all fields', () => {
-    const person: WorkApiPerson = {
-      cpf: '12345678909',
-      nome: 'João Silva',
-      dataNascimento: '1990-01-15',
-      sexo: 'M',
-      nomeMae: 'Maria Silva',
-      renda: 5000,
-      patrimonio: 100000,
-      profissao: 'Engenheiro',
-      escolaridade: 'Superior Completo',
-      estadoCivil: 'Casado',
-      telefones: [{ numero: '11999998888', tipo: 'celular' }],
-      emails: [{ email: 'joao@email.com' }],
-      enderecos: [
-        {
-          logradouro: 'Rua das Flores',
-          numero: '123',
-          bairro: 'Centro',
-          cidade: 'São Paulo',
-          uf: 'SP',
-          cep: '01234-567',
-        },
-      ],
+describe('buildEnrichmentDescription', () => {
+  test('builds description with basic data', () => {
+    const data: WorkApiResponse = {
+      DadosBasicos: {
+        nome: 'João Silva',
+        cpf: '12345678909',
+        dataNascimento: '15/05/1985',
+        sexo: 'M',
+        nomeMae: 'Maria Silva'
+      }
     }
 
-    const description = buildDescription(person, 'Campanha Teste')
+    const result = buildEnrichmentDescription(data)
 
-    expect(description).toContain('=== DADOS ENRIQUECIDOS ===')
-    expect(description).toContain('CPF: 123.456.789-09')
-    expect(description).toContain('Nome: João Silva')
-    expect(description).toContain('Renda: R$')
-    expect(description).toContain('Profissão: Engenheiro')
-    expect(description).toContain('(11) 99999-8888')
-    expect(description).toContain('joao@email.com')
-    expect(description).toContain('Rua das Flores')
-    expect(description).toContain('Campanha: Campanha Teste')
-    expect(description).toContain('=== FIM DOS DADOS ===')
+    expect(result).toContain('DADOS BASICOS')
+    expect(result).toContain('Nome: João Silva')
+    expect(result).toContain('CPF: 123.456.789-09')
+    expect(result).toContain('Nascimento: 15/05/1985')
+    expect(result).toContain('Sexo: M')
+    expect(result).toContain('Mae: Maria Silva')
   })
 
-  test('handles minimal data', () => {
-    const person: WorkApiPerson = {
-      cpf: '12345678909',
-      nome: 'João Silva',
+  test('applies income multiplier to economic data', () => {
+    const data: WorkApiResponse = {
+      DadosEconomicos: {
+        renda: '1000',
+        poderAquisitivo: {
+          poderAquisitivoDescricao: 'MEDIO'
+        }
+      }
     }
 
-    const description = buildDescription(person)
+    const result = buildEnrichmentDescription(data, { incomeMultiplier: 1.9 })
 
-    expect(description).toContain('CPF: 123.456.789-09')
-    expect(description).toContain('Nome: João Silva')
-    expect(description).not.toContain('Campanha:')
-  })
-})
-
-describe('buildSimpleDescription', () => {
-  test('builds simple description', () => {
-    const description = buildSimpleDescription('João Silva', '11999998888', 'joao@email.com', 'Campanha Teste')
-
-    expect(description).toContain('=== LEAD NÃO ENRIQUECIDO ===')
-    expect(description).toContain('Nome: João Silva')
-    expect(description).toContain('Telefone: (11) 99999-8888')
-    expect(description).toContain('Email: joao@email.com')
-    expect(description).toContain('Campanha: Campanha Teste')
+    expect(result).toContain('DADOS ECONOMICOS')
+    expect(result).toContain('1.900,00') // 1000 * 1.9 = 1900
+    expect(result).toContain('Fator aplicado: 1.9x')
+    expect(result).toContain('Poder Aquisitivo: MEDIO')
   })
 
-  test('handles missing optional fields', () => {
-    const description = buildSimpleDescription('João Silva')
+  test('includes phone numbers', () => {
+    const data: WorkApiResponse = {
+      telefones: [
+        { telefone: '11987654321', tipo: 'CELULAR', operadora: 'VIVO', whatsapp: 'S' },
+        { telefone: '1132654321', tipo: 'FIXO' }
+      ]
+    }
 
-    expect(description).toContain('Nome: João Silva')
-    expect(description).not.toContain('Telefone:')
-    expect(description).not.toContain('Email:')
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('TELEFONES')
+    expect(result).toContain('11987654321')
+    expect(result).toContain('CELULAR')
+    expect(result).toContain('VIVO')
+    expect(result).toContain('WhatsApp')
+    expect(result).toContain('1132654321')
+    expect(result).toContain('FIXO')
+  })
+
+  test('limits phones to 5 and shows count', () => {
+    const data: WorkApiResponse = {
+      telefones: Array(8).fill(null).map((_, i) => ({
+        telefone: `1198765432${i}`
+      }))
+    }
+
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('... e mais 3 telefone(s)')
+  })
+
+  test('includes email addresses', () => {
+    const data: WorkApiResponse = {
+      emails: [
+        { email: 'joao@gmail.com', prioridade: '1', qualidade: 'BOM' },
+        { email: 'joao.silva@work.com' }
+      ]
+    }
+
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('EMAILS')
+    expect(result).toContain('joao@gmail.com')
+    expect(result).toContain('Prioridade: 1')
+    expect(result).toContain('[BOM]')
+    expect(result).toContain('joao.silva@work.com')
+  })
+
+  test('includes addresses', () => {
+    const data: WorkApiResponse = {
+      enderecos: [{
+        logradouro: 'Rua das Flores',
+        logradouroNumero: '123',
+        bairro: 'Centro',
+        cidade: 'São Paulo',
+        uf: 'SP',
+        cep: '01234567'
+      }]
+    }
+
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('ENDERECOS')
+    expect(result).toContain('Rua das Flores')
+    expect(result).toContain('123')
+    expect(result).toContain('Centro')
+    expect(result).toContain('São Paulo')
+    expect(result).toContain('SP')
+  })
+
+  test('includes companies', () => {
+    const data: WorkApiResponse = {
+      empresas: [{
+        cnpj: '12345678000190',
+        razaoSocial: 'Empresa LTDA',
+        relacao: 'SOCIO'
+      }]
+    }
+
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('EMPRESAS')
+    expect(result).toContain('Empresa LTDA')
+    expect(result).toContain('SOCIO')
+  })
+
+  test('truncates to maxLength', () => {
+    const data: WorkApiResponse = {
+      DadosBasicos: {
+        nome: 'A'.repeat(1000)
+      },
+      telefones: Array(100).fill(null).map((_, i) => ({
+        telefone: `1198765432${i}`
+      }))
+    }
+
+    const result = buildEnrichmentDescription(data, { maxLength: 500 })
+
+    expect(result.length).toBeLessThanOrEqual(500)
+    expect(result).toEndWith('...')
+  })
+
+  test('includes header and footer', () => {
+    const data: WorkApiResponse = {}
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('=== DADOS ENRIQUECIDOS ===')
+    expect(result).toContain('===========================')
+    expect(result).toContain('Enriquecido em:')
+  })
+
+  test('handles empty data gracefully', () => {
+    const data: WorkApiResponse = {}
+    const result = buildEnrichmentDescription(data)
+
+    expect(result).toContain('=== DADOS ENRIQUECIDOS ===')
+    expect(result.length).toBeGreaterThan(0)
   })
 })
