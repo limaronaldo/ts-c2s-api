@@ -301,13 +301,14 @@ export class C2SService {
     type?: string,
   ): Promise<unknown> {
     c2sLogger.info({ leadId }, "Adding message to lead");
-    const body: C2SMessageCreate = { message };
-    if (type) body.type = type;
+    // C2S API expects {body: string} not {message: string}
+    const payload: { body: string; type?: string } = { body: message };
+    if (type) payload.type = type;
     return this.request(
       "POST",
       `/integration/leads/${leadId}/create_message`,
       undefined,
-      body,
+      payload,
     );
   }
 
