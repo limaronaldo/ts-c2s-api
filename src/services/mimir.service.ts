@@ -38,7 +38,9 @@ export class MimirService {
     this.baseUrl = config.MIMIR_URL;
   }
 
-  async findCpfByPhone(phone: string): Promise<string | null> {
+  async findCpfByPhone(
+    phone: string,
+  ): Promise<{ cpf: string; name: string } | null> {
     const normalizedPhone = normalizePhone(phone);
     mimirLogger.info(
       { phone: normalizedPhone },
@@ -58,25 +60,27 @@ export class MimirService {
         },
       );
 
+      const responseText = await response.text();
+
       if (!response.ok) {
+        mimirLogger.warn(
+          {
+            phone: normalizedPhone,
+            status: response.status,
+            error: responseText,
+          },
+          "Mimir returned error status",
+        );
         if (response.status === 404) {
-          mimirLogger.debug(
-            { phone: normalizedPhone },
-            "Phone not found in Mimir",
-          );
           return null;
         }
         if (response.status === 401) {
-          mimirLogger.error(
-            { phone: normalizedPhone },
-            "Mimir authentication failed",
-          );
           throw new Error("Mimir authentication failed");
         }
-        throw new Error(`Mimir returned ${response.status}`);
+        throw new Error(`Mimir returned ${response.status}: ${responseText}`);
       }
 
-      const data = (await response.json()) as MimirResponse;
+      const data = JSON.parse(responseText) as MimirResponse;
 
       // Check if we have valid data with pessoas array
       if (data.status !== 1 || !data.data?.pessoas?.length) {
@@ -87,8 +91,10 @@ export class MimirService {
         return null;
       }
 
-      // Extract CPF from first person's dados_basicos
-      const cpf = data.data.pessoas[0]?.dados_basicos?.cpf;
+      // Extract CPF and name from first person's dados_basicos
+      const pessoa = data.data.pessoas[0];
+      const cpf = pessoa?.dados_basicos?.cpf;
+      const name = pessoa?.dados_basicos?.nome || "";
 
       if (!cpf) {
         mimirLogger.debug(
@@ -99,15 +105,75 @@ export class MimirService {
       }
 
       mimirLogger.info(
-        { phone: normalizedPhone, cpf },
+        { phone: normalizedPhone, cpf, name },
         "Found CPF by phone in Mimir",
       );
-      return cpf;
+      return { cpf, name };
     } catch (error) {
       mimirLogger.error(
         { phone: normalizedPhone, error },
         "Failed to lookup phone in Mimir",
       );
+      throw AppError.serviceUnavailable("Mimir");
+    }
+  }
+
+  async findCpfByEmail(
+    email: string,
+  ): Promise<{ cpf: string; name: string } | null> {
+    mimirLogger.info({ email }, "Looking up CPF by email in Mimir");
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/api/v1/search/email-simplified`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ q: email.toLowerCase().trim() }),
+        },
+      );
+
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        mimirLogger.warn(
+          { email, status: response.status, error: responseText },
+          "Mimir returned error status",
+        );
+        if (response.status === 404) {
+          return null;
+        }
+        if (response.status === 401) {
+          throw new Error("Mimir authentication failed");
+        }
+        throw new Error(`Mimir returned ${response.status}: ${responseText}`);
+      }
+
+      const data = JSON.parse(responseText) as MimirResponse;
+
+      // Check if we have valid data with pessoas array
+      if (data.status !== 1 || !data.data?.pessoas?.length) {
+        mimirLogger.debug({ email }, "No results found in Mimir");
+        return null;
+      }
+
+      // Extract CPF and name from first person's dados_basicos
+      const pessoa = data.data.pessoas[0];
+      const cpf = pessoa?.dados_basicos?.cpf;
+      const name = pessoa?.dados_basicos?.nome || "";
+
+      if (!cpf) {
+        mimirLogger.debug({ email }, "No CPF found in Mimir response");
+        return null;
+      }
+
+      mimirLogger.info({ email, cpf, name }, "Found CPF by email in Mimir");
+      return { cpf, name };
+    } catch (error) {
+      mimirLogger.error({ email, error }, "Failed to lookup email in Mimir");
       throw AppError.serviceUnavailable("Mimir");
     }
   }

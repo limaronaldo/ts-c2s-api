@@ -3,9 +3,16 @@ import {
   type WorkApiPerson,
   type WorkApiFetchResult,
 } from "./work-api.service";
-import { CpfDiscoveryService } from "./cpf-discovery.service";
+import {
+  CpfDiscoveryService,
+  type CpfDiscoveryResult,
+} from "./cpf-discovery.service";
 import { C2SService, type C2SLeadCreate } from "./c2s.service";
 import { DbStorageService } from "./db-storage.service";
+import {
+  IbviPropertyService,
+  type PropertySummary,
+} from "./ibvi-property.service";
 import { recentCpfCache, processingLeadsCache } from "../utils/cache";
 import {
   normalizeIncome,
@@ -58,6 +65,7 @@ export class EnrichmentService {
   private cpfDiscoveryService: CpfDiscoveryService;
   private c2sService: C2SService;
   private dbStorage: DbStorageService;
+  private ibviPropertyService: IbviPropertyService;
   private incomeMultiplier: number;
 
   constructor() {
@@ -65,6 +73,7 @@ export class EnrichmentService {
     this.cpfDiscoveryService = new CpfDiscoveryService();
     this.c2sService = new C2SService();
     this.dbStorage = new DbStorageService();
+    this.ibviPropertyService = new IbviPropertyService();
     this.incomeMultiplier = getConfig().INCOME_MULTIPLIER;
   }
 
@@ -94,18 +103,21 @@ export class EnrichmentService {
       const normalizedPhone = phone ? normalizePhone(phone) : undefined;
       const normalizedEmail = email ? normalizeEmail(email) : undefined;
 
-      const cpf = await this.cpfDiscoveryService.findCpf(
+      const cpfResult = await this.cpfDiscoveryService.findCpf(
         normalizedPhone,
         normalizedEmail ?? undefined,
+        name, // RML-595: Pass lead name for smart matching
       );
 
-      if (!cpf) {
+      if (!cpfResult) {
         enrichmentLogger.info(
           { leadId },
           "Could not discover CPF, creating unenriched customer",
         );
         return this.createUnenrichedCustomer(lead);
       }
+
+      const { cpf, foundName, nameMatches } = cpfResult;
 
       // Check if CPF was recently processed
       if (recentCpfCache.has(cpf)) {
@@ -122,8 +134,22 @@ export class EnrichmentService {
       }
 
       // Step 2: Fetch enrichment data from Work API (with timeout handling)
-      const workApiResult =
-        await this.workApiService.fetchByCpfWithTimeout(cpf);
+      // Also fetch property data from IBVI database in parallel (RML-596)
+      const [workApiResult, propertyData] = await Promise.all([
+        this.workApiService.fetchByCpfWithTimeout(cpf),
+        this.ibviPropertyService.findPropertiesByCpf(cpf).catch((err) => {
+          enrichmentLogger.warn(
+            { cpf, error: err },
+            "Failed to fetch IBVI property data",
+          );
+          return null;
+        }),
+      ]);
+
+      // Build name mismatch warning if applicable
+      const nameMismatchWarning = !nameMatches
+        ? `⚠️ ATENÇÃO: Nome diferente do registrado no Lead\n   Lead: ${name}\n   Base: ${foundName}\n\n`
+        : "";
 
       // Handle Work API timeout - proceed with partial enrichment
       if (workApiResult.timedOut) {
@@ -131,7 +157,12 @@ export class EnrichmentService {
           { leadId, cpf },
           "Work API timed out, creating partial enrichment customer",
         );
-        return this.createPartialEnrichmentCustomer(lead, cpf);
+        return this.createPartialEnrichmentCustomer(
+          lead,
+          cpf,
+          propertyData,
+          nameMismatchWarning,
+        );
       }
 
       if (!workApiResult.data) {
@@ -139,7 +170,12 @@ export class EnrichmentService {
           { leadId, cpf },
           "No enrichment data found, creating basic customer",
         );
-        return this.createBasicCustomer(lead, cpf);
+        return this.createBasicCustomer(
+          lead,
+          cpf,
+          propertyData,
+          nameMismatchWarning,
+        );
       }
 
       const personData = workApiResult.data;
@@ -147,8 +183,13 @@ export class EnrichmentService {
       // Step 3: Store in database
       const party = await this.storePartyData(personData, cpf);
 
-      // Step 4: Create/update C2S customer
-      const c2sResult = await this.createEnrichedCustomer(lead, personData);
+      // Step 4: Create/update C2S customer (with property data - RML-596)
+      const c2sResult = await this.createEnrichedCustomer(
+        lead,
+        personData,
+        propertyData,
+        nameMismatchWarning,
+      );
 
       // Mark CPF as recently processed
       recentCpfCache.set(cpf, true);
@@ -267,8 +308,20 @@ export class EnrichmentService {
   private async createEnrichedCustomer(
     lead: LeadData,
     person: WorkApiPerson,
+    propertyData: PropertySummary | null,
+    nameMismatchWarning: string = "",
   ): Promise<{ data: { id: string } }> {
-    const description = buildDescription(person, lead.campaignName);
+    let description =
+      nameMismatchWarning + buildDescription(person, lead.campaignName);
+
+    // Append property data if available (RML-596)
+    if (propertyData && propertyData.totalProperties > 0) {
+      const propertySection =
+        this.ibviPropertyService.formatForMessage(propertyData);
+      if (propertySection) {
+        description += "\n\n" + propertySection;
+      }
+    }
 
     // Try adding enrichment message to existing lead first
     try {
@@ -361,42 +414,81 @@ export class EnrichmentService {
   private async createBasicCustomer(
     lead: LeadData,
     cpf: string,
+    propertyData: PropertySummary | null,
+    nameMismatchWarning: string = "",
   ): Promise<EnrichmentResult> {
-    const description = buildSimpleDescription(
-      lead.name,
-      lead.phone,
-      lead.email,
-      lead.campaignName,
-    );
+    let description =
+      nameMismatchWarning +
+      buildSimpleDescription(
+        lead.name,
+        lead.phone,
+        lead.email,
+        lead.campaignName,
+      );
 
-    const leadData: C2SLeadCreate = {
-      customer: normalizeName(lead.name) || lead.name,
-      phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
-      email: lead.email ? (normalizeEmail(lead.email) ?? undefined) : undefined,
-      description,
-      source: lead.source || "google_ads",
-      product: lead.campaignName,
-    };
+    // Append property data if available (RML-596)
+    if (propertyData && propertyData.totalProperties > 0) {
+      const propertySection =
+        this.ibviPropertyService.formatForMessage(propertyData);
+      if (propertySection) {
+        description += "\n\n" + propertySection;
+      }
+    }
 
-    const result = await this.c2sService.createLead(leadData);
+    // Try adding message to existing lead first
+    try {
+      await this.c2sService.createMessage(lead.leadId, description);
 
-    // Mark CPF as recently processed
-    recentCpfCache.set(cpf, true);
+      // Mark CPF as recently processed
+      recentCpfCache.set(cpf, true);
 
-    await this.dbStorage.updateLeadEnrichmentStatus(
-      lead.leadId,
-      "basic",
-      undefined,
-      result.data.id,
-    );
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "basic",
+        undefined,
+        lead.leadId,
+      );
 
-    return {
-      success: true,
-      cpf,
-      c2sCustomerId: result.data.id,
-      enriched: false,
-      message: "Customer created with CPF but no enrichment data",
-    };
+      return {
+        success: true,
+        cpf,
+        c2sCustomerId: lead.leadId,
+        enriched: false,
+        message: "Added basic enrichment to existing lead (no Work API data)",
+      };
+    } catch {
+      // If message fails, try creating new lead
+      const leadData: C2SLeadCreate = {
+        customer: normalizeName(lead.name) || lead.name,
+        phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
+        email: lead.email
+          ? (normalizeEmail(lead.email) ?? undefined)
+          : undefined,
+        description,
+        source: lead.source || "google_ads",
+        product: lead.campaignName,
+      };
+
+      const result = await this.c2sService.createLead(leadData);
+
+      // Mark CPF as recently processed
+      recentCpfCache.set(cpf, true);
+
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "basic",
+        undefined,
+        result.data.id,
+      );
+
+      return {
+        success: true,
+        cpf,
+        c2sCustomerId: result.data.id,
+        enriched: false,
+        message: "Customer created with CPF but no enrichment data",
+      };
+    }
   }
 
   /**
@@ -407,14 +499,27 @@ export class EnrichmentService {
   private async createPartialEnrichmentCustomer(
     lead: LeadData,
     cpf: string,
+    propertyData: PropertySummary | null,
+    nameMismatchWarning: string = "",
   ): Promise<EnrichmentResult> {
-    const description = buildPartialEnrichmentDescription(
-      lead.name,
-      cpf,
-      lead.phone,
-      lead.email,
-      lead.campaignName,
-    );
+    let description =
+      nameMismatchWarning +
+      buildPartialEnrichmentDescription(
+        lead.name,
+        cpf,
+        lead.phone,
+        lead.email,
+        lead.campaignName,
+      );
+
+    // Append property data if available (RML-596)
+    if (propertyData && propertyData.totalProperties > 0) {
+      const propertySection =
+        this.ibviPropertyService.formatForMessage(propertyData);
+      if (propertySection) {
+        description += "\n\n" + propertySection;
+      }
+    }
 
     // For existing C2S leads (like from the last 25), add a message instead of creating new
     // The leadId from C2S is the actual C2S lead ID
