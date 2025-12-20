@@ -61,9 +61,11 @@ export class DiretrixService {
       );
 
       if (!response.ok) {
-        if (response.status === 404) {
+        // 404 = phone not found, 400 = phone not valid/not in database
+        // Both mean we can't enrich via this phone - treat as "not found"
+        if (response.status === 404 || response.status === 400) {
           diretrixLogger.debug(
-            { phone: normalizedPhone },
+            { phone: normalizedPhone, status: response.status },
             "Phone not found in Diretrix",
           );
           return null;
@@ -140,8 +142,13 @@ export class DiretrixService {
       );
 
       if (!response.ok) {
-        if (response.status === 404) {
-          diretrixLogger.debug({ email }, "Email not found in Diretrix");
+        // 404 = email not found, 400 = email not valid/not in database
+        // Both mean we can't enrich via this email - treat as "not found"
+        if (response.status === 404 || response.status === 400) {
+          diretrixLogger.debug(
+            { email, status: response.status },
+            "Email not found in Diretrix",
+          );
           return null;
         }
         const errorText = await response.text().catch(() => "");
