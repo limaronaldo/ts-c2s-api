@@ -24,9 +24,14 @@ const configSchema = z.object({
   DIRETRIX_PASS: z.string().min(1, "DIRETRIX_PASS is required"),
   DIRETRIX_URL: z.string().url().default("https://api.diretrix.com.br"),
 
-  // DBase API (fallback)
+  // DBase API (fallback) - requires IP whitelisting
   DBASE_KEY: z.string().min(1, "DBASE_KEY is required"),
-  DBASE_URL: z.string().url().default("https://dfraud.dfraud.com.br"),
+  DBASE_URL: z
+    .string()
+    .url()
+    .default(
+      "https://app.dbase.com.br/sistema/consultas/Data-basebrasil-api2024/",
+    ),
 
   // Mimir API (Azure IBVI fallback)
   MIMIR_TOKEN: z.string().min(1, "MIMIR_TOKEN is required"),
@@ -35,8 +40,20 @@ const configSchema = z.object({
   // Webhook secret for verification
   WEBHOOK_SECRET: z.string().optional(),
 
+  // Public URL for webhook subscription
+  PUBLIC_URL: z.string().url().optional(),
+
   // Income multiplier (default 1.9x as per Rust implementation)
   INCOME_MULTIPLIER: z.coerce.number().default(1.9),
+
+  // Cron job settings (RML-619)
+  ENABLE_CRON: z
+    .string()
+    .default("false")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+  CRON_INTERVAL: z.string().default("*/15 * * * *"), // Every 15 minutes
+  CRON_BATCH_SIZE: z.coerce.number().default(25),
+  CRON_DELAY_MS: z.coerce.number().default(1000),
 });
 
 export type Config = z.infer<typeof configSchema>;
