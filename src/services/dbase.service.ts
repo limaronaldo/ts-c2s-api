@@ -4,10 +4,14 @@ import { normalizePhone } from "../utils/phone";
 import { AppError } from "../errors/app-error";
 
 export interface DBaseResponse {
+  status: boolean;
+  msg?: string;
   cpf?: string;
   nome?: string;
-  status?: string;
-  message?: string;
+  data_nascimento?: string;
+  sexo?: string;
+  mae?: string;
+  situacao_cpf?: string;
 }
 
 /**
@@ -24,7 +28,9 @@ export class DBaseService {
     this.baseUrl = config.DBASE_URL;
   }
 
-  async findCpfByPhone(phone: string): Promise<string | null> {
+  async findCpfByPhone(
+    phone: string,
+  ): Promise<{ cpf: string; name: string } | null> {
     const normalizedPhone = normalizePhone(phone);
     dbaseLogger.info(
       { phone: normalizedPhone },
@@ -32,14 +38,20 @@ export class DBaseService {
     );
 
     try {
-      // DBase uses multipart form-data with token in body
+      // DBase uses multipart form-data with:
+      // - consulta: "telefone" (query type)
+      // - telefone: the phone number
+      // - token: API key (NOT Bearer auth header)
       const formData = new FormData();
-      formData.append("token", this.token);
+      formData.append("consulta", "telefone");
       formData.append("telefone", normalizedPhone);
+      formData.append("token", this.token);
 
-      const response = await fetch(`${this.baseUrl}/api/telefone`, {
+      // DBase API posts directly to base URL (not /api/telefone)
+      const response = await fetch(this.baseUrl, {
         method: "POST",
         body: formData,
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       });
 
       if (!response.ok) {
@@ -55,19 +67,33 @@ export class DBaseService {
 
       const data = (await response.json()) as DBaseResponse;
 
-      if (!data.cpf || data.status === "error") {
+      dbaseLogger.info(
+        { phone: normalizedPhone, response: data },
+        "DBase API response received",
+      );
+
+      // Check for IP whitelisting error
+      if (!data.status && data.msg?.includes("ip não está liberado")) {
+        dbaseLogger.error(
+          { phone: normalizedPhone, msg: data.msg },
+          "DBase API: IP not whitelisted",
+        );
+        return null;
+      }
+
+      if (!data.status || !data.cpf) {
         dbaseLogger.debug(
-          { phone: normalizedPhone, message: data.message },
+          { phone: normalizedPhone, msg: data.msg },
           "No CPF found in DBase",
         );
         return null;
       }
 
       dbaseLogger.info(
-        { phone: normalizedPhone, cpf: data.cpf },
+        { phone: normalizedPhone, cpf: data.cpf, name: data.nome },
         "Found CPF by phone in DBase",
       );
-      return data.cpf;
+      return { cpf: data.cpf, name: data.nome || "" };
     } catch (error) {
       dbaseLogger.error(
         { phone: normalizedPhone, error },
