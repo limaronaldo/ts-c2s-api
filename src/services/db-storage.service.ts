@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db/client";
 import type {
   Party,
@@ -146,21 +146,55 @@ export class DbStorageService {
     return created;
   }
 
+  /**
+   * Upsert lead enrichment status
+   * Creates the lead record if it doesn't exist (for leads fetched from C2S API)
+   * Updates the status if it already exists
+   */
   async updateLeadEnrichmentStatus(
     leadId: string,
     status: string,
     partyId?: string,
     c2sCustomerId?: string,
   ): Promise<void> {
-    await this.db
-      .update(schema.googleAdsLeads)
-      .set({
+    const existing = await this.findLeadByLeadId(leadId);
+
+    if (existing) {
+      // Update existing lead
+      await this.db
+        .update(schema.googleAdsLeads)
+        .set({
+          enrichmentStatus: status,
+          partyId,
+          c2sCustomerId,
+          enrichedAt: status === "completed" ? new Date() : undefined,
+        })
+        .where(eq(schema.googleAdsLeads.leadId, leadId));
+    } else {
+      // Create new lead record (for leads fetched from C2S API)
+      await this.db.insert(schema.googleAdsLeads).values({
+        leadId,
         enrichmentStatus: status,
         partyId,
         c2sCustomerId,
         enrichedAt: status === "completed" ? new Date() : undefined,
-      })
-      .where(eq(schema.googleAdsLeads.leadId, leadId));
+      });
+      dbLogger.info({ leadId, status }, "Created new lead record for C2S lead");
+    }
+  }
+
+  /**
+   * Get leads by enrichment status
+   * Used for batch retry of failed/partial enrichments (RML-618)
+   */
+  async getLeadsByStatus(
+    statuses: string[],
+  ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    return this.db
+      .select()
+      .from(schema.googleAdsLeads)
+      .where(inArray(schema.googleAdsLeads.enrichmentStatus, statuses))
+      .orderBy(schema.googleAdsLeads.createdAt);
   }
 
   // Webhook event operations (for idempotency)

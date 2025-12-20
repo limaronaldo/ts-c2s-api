@@ -25,8 +25,12 @@ export interface C2SLeadUpdate {
   status?: string;
 }
 
+// C2S Lead response structure - note: phone/email are nested in attributes.customer
 export interface C2SLead {
   id: string;
+  type?: string;
+  internal_id?: number;
+  // Direct fields (may not be populated)
   customer: string;
   phone?: string;
   email?: string;
@@ -37,6 +41,31 @@ export interface C2SLead {
   seller_id?: string;
   created_at: string;
   updated_at: string;
+  // Nested attributes structure (where phone/email actually live)
+  attributes?: {
+    description?: string;
+    customer?: {
+      id?: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      phone2?: string;
+      phone_global?: string;
+    };
+    product?: {
+      id?: string;
+      description?: string;
+    };
+    lead_source?: {
+      id?: number;
+      name?: string;
+    };
+    lead_status?: {
+      id?: number;
+      alias?: string;
+      name?: string;
+    };
+  };
 }
 
 export interface C2SLeadResponse {
@@ -507,6 +536,41 @@ export class C2SService {
         url: webhookUrl,
       },
     );
+  }
+
+  // ========== HELPER METHODS ==========
+
+  /**
+   * Extract phone from lead (handles nested attributes.customer structure)
+   */
+  static extractPhone(lead: C2SLead): string | undefined {
+    // Try direct field first
+    if (lead.phone) return lead.phone;
+    // Try nested attributes.customer
+    return (
+      lead.attributes?.customer?.phone ||
+      lead.attributes?.customer?.phone_global
+    );
+  }
+
+  /**
+   * Extract email from lead (handles nested attributes.customer structure)
+   */
+  static extractEmail(lead: C2SLead): string | undefined {
+    // Try direct field first
+    if (lead.email) return lead.email;
+    // Try nested attributes.customer
+    return lead.attributes?.customer?.email;
+  }
+
+  /**
+   * Extract customer name from lead (handles nested attributes.customer structure)
+   */
+  static extractCustomerName(lead: C2SLead): string {
+    // Try direct field first
+    if (lead.customer) return lead.customer;
+    // Try nested attributes.customer
+    return lead.attributes?.customer?.name || "Unknown";
   }
 
   // ========== LEGACY COMPATIBILITY ==========
