@@ -48,12 +48,16 @@ describe("EnrichmentService", () => {
     });
 
     test("skips when CPF not found from any source", () => {
-      const phoneLookupResult: { cpf: string } | null = null;
-      const emailLookupResult: { cpf: string } | null = null;
+      // Simulating scenario where both lookups return null
+      const lookupResults = {
+        phone: null as { cpf: string } | null,
+        email: null as { cpf: string } | null,
+      };
 
-      const cpf = phoneLookupResult?.cpf || emailLookupResult?.cpf || null;
+      const cpf = lookupResults.phone?.cpf || lookupResults.email?.cpf || null;
       const skipReason = cpf ? null : "cpf_not_found";
 
+      expect(cpf).toBeNull();
       expect(skipReason).toBe("cpf_not_found");
     });
 

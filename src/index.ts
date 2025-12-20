@@ -7,6 +7,10 @@ import {
   startEnrichmentCron,
   stopEnrichmentCron,
 } from "./jobs/enrichment-cron";
+import { initializeCaches } from "./utils/cache";
+import { closeRedis } from "./utils/redis-cache";
+import { rateLimit } from "./middleware/rate-limit";
+import { apiKeyAuth, getApiKeysFromEnv } from "./middleware/auth";
 
 const app = new Elysia().use(errorHandler).use(healthRoute);
 
@@ -14,6 +18,41 @@ const app = new Elysia().use(errorHandler).use(healthRoute);
 // This allows the health check to work even without full configuration
 if (hasFullConfig()) {
   logger.info("Full configuration detected, loading all routes");
+
+  // Initialize caches (Redis if configured, otherwise in-memory)
+  initializeCaches();
+
+  // Apply rate limiting if enabled
+  const config = getConfig();
+  if (config.RATE_LIMIT_ENABLED) {
+    app.use(
+      rateLimit({
+        max: config.RATE_LIMIT_MAX,
+        windowMs: config.RATE_LIMIT_WINDOW_MS,
+        skip: (request) => {
+          // Skip rate limiting for health checks
+          const url = new URL(request.url);
+          return url.pathname === "/health";
+        },
+      }),
+    );
+    logger.info(
+      { max: config.RATE_LIMIT_MAX, windowMs: config.RATE_LIMIT_WINDOW_MS },
+      "Rate limiting enabled",
+    );
+  }
+
+  // Apply API key authentication if configured
+  const apiKeys = getApiKeysFromEnv();
+  if (apiKeys.length > 0) {
+    app.use(
+      apiKeyAuth({
+        apiKeys,
+        skipPaths: ["/health", "/dashboard", "/webhook"],
+      }),
+    );
+    logger.info({ keyCount: apiKeys.length }, "API key authentication enabled");
+  }
 
   // Dynamically import routes that require full config
   const { leadsRoute } = await import("./routes/leads");
@@ -46,7 +85,6 @@ if (hasFullConfig()) {
     .use(dashboardRoute);
 
   // Start cron job if enabled (RML-619)
-  const config = getConfig();
   if (config.ENABLE_CRON) {
     startEnrichmentCron({
       enabled: true,
@@ -73,6 +111,7 @@ logger.info({ port, host }, `Server started on http://${host}:${port}`);
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
   stopEnrichmentCron();
+  await closeRedis();
   const { closeDb } = await import("./db/client");
   await closeDb();
   process.exit(0);
@@ -81,6 +120,7 @@ process.on("SIGTERM", async () => {
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
   stopEnrichmentCron();
+  await closeRedis();
   const { closeDb } = await import("./db/client");
   await closeDb();
   process.exit(0);

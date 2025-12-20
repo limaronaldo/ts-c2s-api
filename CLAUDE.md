@@ -107,6 +107,12 @@ Optional:
 - `GOOGLE_ADS_WEBHOOK_KEY` - Google Ads auth
 - `C2S_DEFAULT_SELLER_ID` - Default seller for new leads
 - `INCOME_MULTIPLIER` - Business rule (default: 1.9)
+- `REDIS_ENABLED` - Enable Redis caching (default: false)
+- `REDIS_URL` - Redis connection URL
+- `API_KEY` / `API_KEYS` - API key(s) for authentication (comma-separated)
+- `RATE_LIMIT_ENABLED` - Enable rate limiting (default: true)
+- `RATE_LIMIT_MAX` - Max requests per window (default: 100)
+- `RATE_LIMIT_WINDOW_MS` - Rate limit window (default: 60000)
 
 ## API Endpoints
 
@@ -165,10 +171,11 @@ Diretrix API returns 400 for phones not in their database (not just 404). Now tr
 - [x] Push to GitHub ✓ (Dec 20, 2025)
 - [ ] Request DBase IP whitelist for `37.16.3.251` - Requested Dec 20, 2025. Follow up Monday Dec 23 if no response.
 
+### Completed (Dec 20, 2025)
+- [x] Dashboard enhancements - Added donut chart, CSV/JSON export, date filtering, manual retry button
+- [x] Unit & integration tests - 140 tests across 11 files (retry service, alert service, etc.)
+- [x] Redis caching - Optional Redis support with in-memory fallback (`REDIS_ENABLED`, `REDIS_URL`)
+- [x] API rate limiting & authentication - Configurable rate limits and API key auth
+
 ### Future
-- [ ] Test retry flow end-to-end
-- [ ] Add email alerts
-- [ ] Dashboard charts/graphs, export, date filtering
-- [ ] Unit & integration tests
-- [ ] Redis caching (currently in-memory)
-- [ ] API rate limiting & authentication
+- [ ] Add email alerts (complement Slack)

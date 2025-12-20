@@ -68,6 +68,25 @@ const configSchema = z.object({
   ALERT_ERROR_THRESHOLD: z.coerce.number().default(50), // 50% error rate
   ALERT_ERROR_WINDOW_MINUTES: z.coerce.number().default(10),
   ALERT_SERVICE_DOWN_MINUTES: z.coerce.number().default(5),
+
+  // Redis settings (optional - falls back to in-memory cache)
+  REDIS_URL: z.string().url().optional(),
+  REDIS_ENABLED: z
+    .string()
+    .default("false")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // API authentication (optional - disabled if not set)
+  API_KEY: z.string().optional(),
+  API_KEYS: z.string().optional(), // Comma-separated list
+
+  // Rate limiting
+  RATE_LIMIT_ENABLED: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+  RATE_LIMIT_MAX: z.coerce.number().default(100), // Max requests per window
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute window
 });
 
 export type Config = z.infer<typeof configSchema>;

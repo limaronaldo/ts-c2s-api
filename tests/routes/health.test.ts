@@ -2,16 +2,12 @@
  * Health Endpoint Integration Tests
  * TSC-29: Integration tests for /health endpoint
  */
-import { describe, expect, test, beforeAll } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 import { healthRoute } from "../../src/routes/health";
 
 describe("GET /health", () => {
-  let app: Elysia;
-
-  beforeAll(() => {
-    app = new Elysia().use(healthRoute);
-  });
+  const app = new Elysia().use(healthRoute);
 
   test("returns 200 OK", async () => {
     const response = await app.handle(new Request("http://localhost/health"));
