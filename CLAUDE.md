@@ -163,7 +163,7 @@ Diretrix API returns 400 for phones not in their database (not just 404). Now tr
 
 ### Pending
 - [x] Push to GitHub ✓ (Dec 20, 2025)
-- [ ] Request DBase IP whitelist for `37.16.3.251`
+- [ ] Request DBase IP whitelist for `37.16.3.251` - Requested Dec 20, 2025. Follow up Monday Dec 23 if no response.
 
 ### Future
 - [ ] Test retry flow end-to-end
