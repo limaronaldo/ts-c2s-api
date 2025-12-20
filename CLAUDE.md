@@ -126,3 +126,49 @@ Configured for Fly.io (`fly.toml`):
 - Region: `gru` (São Paulo)
 - Auto-scaling with min 1 machine
 - Health checks on `/health`
+- Dedicated IPv4: `37.16.3.251` (for DBase IP whitelist)
+
+## Recent Changes (December 2025)
+
+### RML-639: Retry Logic, Dashboard & Alerts
+
+**New Features:**
+- **Retry Logic**: Failed leads (`partial`, `unenriched`) are retried with exponential backoff (1h, 2h, 4h, 8h, 16h). Max 5 retries before marking as `failed`.
+- **Dashboard**: Real-time monitoring at `/dashboard` with status breakdown, recent leads, failed leads, cron status, service health.
+- **Slack Alerts**: Webhook notifications for `lead_max_retries`, `high_error_rate`, `service_down`. Rate limited to 1 per type per 5 min.
+
+**New Files:**
+- `src/services/retry.service.ts` - Retry logic with exponential backoff
+- `src/services/alert.service.ts` - Slack webhook alerts
+- `src/routes/dashboard.ts` - Dashboard endpoints
+- `src/templates/dashboard.html.ts` - Dashboard HTML template
+
+**Schema Changes:**
+- `analytics.google_ads_leads` added columns: `retry_count`, `last_retry_at`, `last_error`
+
+**New Config:**
+```bash
+RETRY_ENABLED=true
+RETRY_MAX_ATTEMPTS=5
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...
+ALERT_RATE_LIMIT_MINUTES=5
+ALERT_ERROR_THRESHOLD=50
+```
+
+### Diretrix 400 Fix
+
+Diretrix API returns 400 for phones not in their database (not just 404). Now treated as "not found" instead of service error, allowing fallback to Work API tier 3.
+
+## TODO
+
+### Pending
+- [ ] Push to GitHub
+- [ ] Request DBase IP whitelist for `37.16.3.251`
+
+### Future
+- [ ] Test retry flow end-to-end
+- [ ] Add email alerts
+- [ ] Dashboard charts/graphs, export, date filtering
+- [ ] Unit & integration tests
+- [ ] Redis caching (currently in-memory)
+- [ ] API rate limiting & authentication
