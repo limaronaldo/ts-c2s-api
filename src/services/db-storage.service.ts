@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql, lt, or, isNull, desc } from "drizzle-orm";
 import { getDb, schema } from "../db/client";
 import type {
   Party,
@@ -234,5 +234,126 @@ export class DbStorageService {
         errorMessage,
       })
       .where(eq(schema.webhookEvents.id, id));
+  }
+
+  // ============================================
+  // Retry methods (RML-639)
+  // ============================================
+
+  /**
+   * Get leads eligible for retry based on status, count, and timing
+   */
+  async getRetryableLeads(
+    maxRetries: number,
+    retryDelaysMs: number[],
+  ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    const retryableStatuses = ["partial", "unenriched"];
+
+    // Get all leads with retryable status and under max retries
+    const leads = await this.db
+      .select()
+      .from(schema.googleAdsLeads)
+      .where(
+        and(
+          inArray(schema.googleAdsLeads.enrichmentStatus, retryableStatuses),
+          lt(schema.googleAdsLeads.retryCount, maxRetries),
+        ),
+      )
+      .orderBy(schema.googleAdsLeads.createdAt);
+
+    // Filter by timing in memory (complex date math is simpler here)
+    const now = Date.now();
+    return leads.filter((lead) => {
+      if (!lead.lastRetryAt) return true; // Never retried, eligible immediately
+
+      const retryCount = lead.retryCount ?? 0;
+      const delayIndex = Math.min(retryCount, retryDelaysMs.length - 1);
+      const requiredDelay = retryDelaysMs[delayIndex];
+      const timeSinceLastRetry = now - lead.lastRetryAt.getTime();
+
+      return timeSinceLastRetry >= requiredDelay;
+    });
+  }
+
+  /**
+   * Increment retry count and update last error
+   */
+  async incrementRetryCount(leadId: string, error: string): Promise<void> {
+    await this.db
+      .update(schema.googleAdsLeads)
+      .set({
+        retryCount: sql`COALESCE(${schema.googleAdsLeads.retryCount}, 0) + 1`,
+        lastRetryAt: new Date(),
+        lastError: error,
+      })
+      .where(eq(schema.googleAdsLeads.leadId, leadId));
+
+    dbLogger.info({ leadId, error }, "Incremented retry count");
+  }
+
+  /**
+   * Mark lead as permanently failed after max retries
+   */
+  async markLeadFailed(leadId: string, error: string): Promise<void> {
+    await this.db
+      .update(schema.googleAdsLeads)
+      .set({
+        enrichmentStatus: "failed",
+        lastRetryAt: new Date(),
+        lastError: error,
+      })
+      .where(eq(schema.googleAdsLeads.leadId, leadId));
+
+    dbLogger.warn({ leadId, error }, "Marked lead as permanently failed");
+  }
+
+  // ============================================
+  // Dashboard methods (RML-639)
+  // ============================================
+
+  /**
+   * Get lead status counts for dashboard
+   */
+  async getLeadStats(): Promise<Record<string, number>> {
+    const results = await this.db
+      .select({
+        status: schema.googleAdsLeads.enrichmentStatus,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(schema.googleAdsLeads)
+      .groupBy(schema.googleAdsLeads.enrichmentStatus);
+
+    const stats: Record<string, number> = {};
+    for (const row of results) {
+      stats[row.status ?? "unknown"] = row.count;
+    }
+    return stats;
+  }
+
+  /**
+   * Get recent leads for dashboard
+   */
+  async getRecentLeads(
+    limit: number = 20,
+  ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    return this.db
+      .select()
+      .from(schema.googleAdsLeads)
+      .orderBy(desc(schema.googleAdsLeads.createdAt))
+      .limit(limit);
+  }
+
+  /**
+   * Get leads that failed after max retries
+   */
+  async getFailedLeads(
+    limit: number = 50,
+  ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    return this.db
+      .select()
+      .from(schema.googleAdsLeads)
+      .where(eq(schema.googleAdsLeads.enrichmentStatus, "failed"))
+      .orderBy(desc(schema.googleAdsLeads.lastRetryAt))
+      .limit(limit);
   }
 }

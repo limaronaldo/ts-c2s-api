@@ -54,6 +54,20 @@ const configSchema = z.object({
   CRON_INTERVAL: z.string().default("*/15 * * * *"), // Every 15 minutes
   CRON_BATCH_SIZE: z.coerce.number().default(25),
   CRON_DELAY_MS: z.coerce.number().default(1000),
+
+  // Retry settings (RML-639)
+  RETRY_MAX_ATTEMPTS: z.coerce.number().default(5),
+  RETRY_ENABLED: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // Alert settings (RML-639)
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
+  ALERT_RATE_LIMIT_MINUTES: z.coerce.number().default(5),
+  ALERT_ERROR_THRESHOLD: z.coerce.number().default(50), // 50% error rate
+  ALERT_ERROR_WINDOW_MINUTES: z.coerce.number().default(10),
+  ALERT_SERVICE_DOWN_MINUTES: z.coerce.number().default(5),
 });
 
 export type Config = z.infer<typeof configSchema>;

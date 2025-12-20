@@ -23,6 +23,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "croner": "^9.1.0",
     "drizzle-orm": "^0.45.1",
     "elysia": "^1.4.19",
     "pino": "^10.1.0",

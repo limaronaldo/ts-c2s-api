@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  integer,
 } from "drizzle-orm/pg-core";
 
 // Define the analytics schema
@@ -137,6 +138,10 @@ export const googleAdsLeads = analyticsSchema.table(
       "pending",
     ),
     enrichedAt: timestamp("enriched_at"),
+    // Retry tracking columns (RML-639)
+    retryCount: integer("retry_count").default(0),
+    lastRetryAt: timestamp("last_retry_at"),
+    lastError: text("last_error"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -144,6 +149,12 @@ export const googleAdsLeads = analyticsSchema.table(
     campaignIdx: index("idx_google_ads_leads_campaign").on(table.campaignId),
     statusIdx: index("idx_google_ads_leads_status").on(table.enrichmentStatus),
     partyIdx: index("idx_google_ads_leads_party").on(table.partyId),
+    // Index for retry queries (RML-639)
+    retryIdx: index("idx_google_ads_leads_retry").on(
+      table.enrichmentStatus,
+      table.retryCount,
+      table.lastRetryAt,
+    ),
   }),
 );
 

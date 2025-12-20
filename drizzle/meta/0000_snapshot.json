@@ -1,10 +1,8 @@
 {
-  "id": "a44c8c04-5257-4c40-b24b-2f477b79a08b",
-  "prevId": "00000000-0000-0000-0000-000000000000",
-  "version": "5",
-  "dialect": "pg",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "addresses": {
+    "public.addresses": {
       "name": "addresses",
       "schema": "",
       "columns": {
@@ -80,40 +78,64 @@
       },
       "indexes": {
         "idx_addresses_party": {
-          "name": "idx_addresses_party",
           "columns": [
-            "party_id"
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_addresses_party",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_addresses_city_state": {
-          "name": "idx_addresses_city_state",
           "columns": [
-            "city",
-            "state"
+            {
+              "expression": "city",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_addresses_city_state",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "addresses_party_id_parties_id_fk": {
           "name": "addresses_party_id_parties_id_fk",
           "tableFrom": "addresses",
-          "tableTo": "parties",
           "columnsFrom": [
             "party_id"
           ],
+          "tableTo": "parties",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
-    "google_ads_leads": {
+    "public.google_ads_leads": {
       "name": "google_ads_leads",
       "schema": "",
       "columns": {
@@ -231,61 +253,96 @@
       },
       "indexes": {
         "idx_google_ads_leads_lead_id": {
-          "name": "idx_google_ads_leads_lead_id",
           "columns": [
-            "lead_id"
+            {
+              "expression": "lead_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "idx_google_ads_leads_lead_id",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_google_ads_leads_campaign": {
-          "name": "idx_google_ads_leads_campaign",
           "columns": [
-            "campaign_id"
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_google_ads_leads_campaign",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_google_ads_leads_status": {
-          "name": "idx_google_ads_leads_status",
           "columns": [
-            "enrichment_status"
+            {
+              "expression": "enrichment_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_google_ads_leads_status",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_google_ads_leads_party": {
-          "name": "idx_google_ads_leads_party",
           "columns": [
-            "party_id"
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_google_ads_leads_party",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "google_ads_leads_party_id_parties_id_fk": {
           "name": "google_ads_leads_party_id_parties_id_fk",
           "tableFrom": "google_ads_leads",
-          "tableTo": "parties",
           "columnsFrom": [
             "party_id"
           ],
+          "tableTo": "parties",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "google_ads_leads_lead_id_unique": {
           "name": "google_ads_leads_lead_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "lead_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
-      }
+      },
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
-    "parties": {
+    "public.parties": {
       "name": "parties",
       "schema": "",
       "columns": {
@@ -385,18 +442,34 @@
       },
       "indexes": {
         "idx_parties_cpf_cnpj": {
-          "name": "idx_parties_cpf_cnpj",
           "columns": [
-            "cpf_cnpj"
+            {
+              "expression": "cpf_cnpj",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_parties_cpf_cnpj",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_parties_type": {
-          "name": "idx_parties_type",
           "columns": [
-            "type"
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_parties_type",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -404,14 +477,17 @@
       "uniqueConstraints": {
         "parties_cpf_cnpj_unique": {
           "name": "parties_cpf_cnpj_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "cpf_cnpj"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
-      }
+      },
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
-    "party_contacts": {
+    "public.party_contacts": {
       "name": "party_contacts",
       "schema": "",
       "columns": {
@@ -464,48 +540,85 @@
       },
       "indexes": {
         "idx_party_contacts_party": {
-          "name": "idx_party_contacts_party",
           "columns": [
-            "party_id"
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_party_contacts_party",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_party_contacts_value": {
-          "name": "idx_party_contacts_value",
           "columns": [
-            "value"
+            {
+              "expression": "value",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_party_contacts_value",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_party_contacts_unique": {
-          "name": "idx_party_contacts_unique",
           "columns": [
-            "party_id",
-            "type",
-            "value"
+            {
+              "expression": "party_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "value",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "idx_party_contacts_unique",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "party_contacts_party_id_parties_id_fk": {
           "name": "party_contacts_party_id_parties_id_fk",
           "tableFrom": "party_contacts",
-          "tableTo": "parties",
           "columnsFrom": [
             "party_id"
           ],
+          "tableTo": "parties",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {}
+      "uniqueConstraints": {},
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     },
-    "webhook_events": {
+    "public.webhook_events": {
       "name": "webhook_events",
       "schema": "",
       "columns": {
@@ -569,25 +682,49 @@
       },
       "indexes": {
         "idx_webhook_events_external": {
-          "name": "idx_webhook_events_external",
           "columns": [
-            "external_id"
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": true
+          "with": {},
+          "name": "idx_webhook_events_external",
+          "isUnique": true,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_webhook_events_status": {
-          "name": "idx_webhook_events_status",
           "columns": [
-            "status"
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_webhook_events_status",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         },
         "idx_webhook_events_source": {
-          "name": "idx_webhook_events_source",
           "columns": [
-            "source"
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "with": {},
+          "name": "idx_webhook_events_source",
+          "isUnique": false,
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -595,19 +732,28 @@
       "uniqueConstraints": {
         "webhook_events_external_id_unique": {
           "name": "webhook_events_external_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "external_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
-      }
+      },
+      "policies": {},
+      "isRLSEnabled": false,
+      "checkConstraints": {}
     }
   },
   "enums": {},
   "schemas": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
-  }
+    "tables": {},
+    "columns": {}
+  },
+  "id": "a44c8c04-5257-4c40-b24b-2f477b79a08b",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "sequences": {},
+  "policies": {},
+  "views": {},
+  "roles": {}
 }
