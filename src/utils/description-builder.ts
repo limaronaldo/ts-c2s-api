@@ -125,10 +125,11 @@ export function buildDescription(
       if (addr.complemento) lines.push(`   ${addr.complemento}`);
       if (location) lines.push(`   ${location}`);
       if (addr.cep) lines.push(`   CEP: ${addr.cep}`);
-      if (
-        person.enderecos.length > 1 &&
-        addr !== person.enderecos[person.enderecos.slice(0, 2).pop()!]
-      ) {
+      // Add separator between addresses (except after last one shown)
+      const isLastShown =
+        person.enderecos.indexOf(addr) ===
+        Math.min(1, person.enderecos.length - 1);
+      if (person.enderecos.length > 1 && !isLastShown) {
         lines.push("   ---");
       }
     }
