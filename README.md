@@ -435,6 +435,30 @@ fly logs | grep "cpf-discovery"
 fly logs | grep "alerts"
 ```
 
+## TODO / Future Improvements
+
+### Pending Actions
+
+- [ ] **Push to GitHub** - Local commits need to be pushed to remote
+- [ ] **DBase IP Whitelist** - Request DBase to whitelist `37.16.3.251` for tier 1 CPF discovery
+
+### Future Enhancements
+
+- [ ] **Test retry flow** - Trigger manual enrichment failures to verify retry logic
+- [ ] **Add email alerts** - Currently only Slack, add email notifications
+- [ ] **Dashboard improvements**:
+  - Add charts/graphs for historical trends
+  - Export functionality (CSV/JSON)
+  - Date range filtering
+- [ ] **Unit tests** - Add tests for services (enrichment, CPF discovery, etc.)
+- [ ] **Integration tests** - End-to-end enrichment flow tests
+- [ ] **Performance optimization**:
+  - Connection pooling for external APIs
+  - Request batching for Work API
+  - Redis caching (currently in-memory)
+- [ ] **Rate limiting** - Add rate limiting to API endpoints
+- [ ] **API authentication** - Add API key authentication for external access
+
 ## License
 
 Private - MBRAS Internal Use Only
