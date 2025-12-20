@@ -2,6 +2,49 @@ import { Elysia, t } from "elysia";
 import { container } from "../container";
 import { webhookLogger } from "../utils/logger";
 import { AppError } from "../errors/app-error";
+import { getConfig } from "../config";
+
+// C2S webhook payload structure
+type C2SHookAction = "on_create_lead" | "on_update_lead" | "on_close_lead";
+
+interface C2SWebhookPayload {
+  hook_action: C2SHookAction;
+  lead: {
+    id: string;
+    internal_id?: number;
+    attributes?: {
+      description?: string;
+      observation?: string;
+      customer?: {
+        id: string;
+        name: string;
+        email?: string;
+        phone?: string;
+        phone2?: string;
+      };
+      seller?: {
+        id: string;
+        name: string;
+        email?: string;
+      };
+      lead_source?: {
+        id: number;
+        name: string;
+      };
+      lead_status?: {
+        id: number;
+        alias: string;
+        name: string;
+      };
+      product?: {
+        id: string;
+        description: string;
+      };
+      created_at?: string;
+      updated_at?: string;
+    };
+  };
+}
 
 // Google Ads webhook payload structure
 interface GoogleAdsWebhookPayload {
@@ -56,126 +99,330 @@ function extractUserData(payload: GoogleAdsWebhookPayload): {
   return { name, phone, email };
 }
 
-export const webhookRoute = new Elysia({ prefix: "/webhook" }).post(
-  "/google-ads",
-  async ({ body, headers }) => {
-    const payload = body as GoogleAdsWebhookPayload;
+export const webhookRoute = new Elysia({ prefix: "/webhook" })
+  // C2S Webhook Handler - receives events when leads are created/updated in C2S
+  .post(
+    "/c2s",
+    async ({ body, headers, set }) => {
+      const startTime = Date.now();
+      const payload = body as C2SWebhookPayload;
+      const { hook_action, lead } = payload;
 
-    webhookLogger.info(
-      { leadId: payload.lead_id, campaignName: payload.campaign_name },
-      "Google Ads webhook received",
-    );
-
-    // Check for idempotency
-    const existingEvent = await container.dbStorage.findWebhookEvent(
-      payload.lead_id,
-    );
-    if (existingEvent) {
       webhookLogger.info(
-        { leadId: payload.lead_id },
-        "Webhook event already processed",
+        { hookAction: hook_action, leadId: lead.id },
+        "C2S webhook received",
       );
-      return {
-        data: {
-          status: "already_processed",
-          eventId: existingEvent.id,
-        },
-      };
-    }
 
-    // Create webhook event record
-    const event = await container.dbStorage.createWebhookEvent({
-      externalId: payload.lead_id,
-      source: "google_ads",
-      eventType: "lead",
-      payload: payload as unknown as Record<string, unknown>,
-      status: "processing",
-    });
+      // Optional: Validate webhook secret if configured
+      const config = getConfig();
+      const webhookSecret = headers["x-webhook-secret"];
+      if (config.WEBHOOK_SECRET && webhookSecret !== config.WEBHOOK_SECRET) {
+        webhookLogger.warn({ leadId: lead.id }, "Invalid webhook secret");
+        set.status = 401;
+        return {
+          success: false,
+          message: "Invalid webhook secret",
+        };
+      }
 
-    try {
-      // Extract user data from columns
-      const { name, phone, email } = extractUserData(payload);
+      // Validate hook_action
+      const validActions: C2SHookAction[] = [
+        "on_create_lead",
+        "on_update_lead",
+        "on_close_lead",
+      ];
+      if (!validActions.includes(hook_action)) {
+        set.status = 422;
+        return {
+          success: false,
+          message: `Invalid hook_action: ${hook_action}`,
+        };
+      }
 
-      // Store the lead
-      await container.dbStorage.upsertGoogleAdsLead({
-        leadId: payload.lead_id,
-        name,
-        phone,
-        email,
-        campaignId: payload.campaign_id,
-        campaignName: payload.campaign_name,
-        adGroupId: payload.ad_group_id,
-        adGroupName: payload.ad_group_name,
-        formId: payload.form_id,
-        formName: payload.form_name,
-        gclidValue: payload.gclid,
-        rawData: payload as unknown as Record<string, unknown>,
-        enrichmentStatus: "processing",
-      });
+      // Extract lead data
+      const customer = lead.attributes?.customer;
+      const leadId = lead.id;
+      const name = customer?.name || "Unknown";
+      const phone = customer?.phone?.replace(/\D/g, "") || undefined;
+      const email = customer?.email || undefined;
+      const source = lead.attributes?.lead_source?.name || "c2s_webhook";
+      const campaignName = lead.attributes?.product?.description;
 
-      // Run enrichment
-      const result = await container.enrichment.enrichLead({
-        leadId: payload.lead_id,
-        name,
-        phone,
-        email,
-        campaignId: payload.campaign_id,
-        campaignName: payload.campaign_name,
+      try {
+        switch (hook_action) {
+          case "on_create_lead":
+            // Queue enrichment asynchronously (don't block webhook response)
+            setImmediate(async () => {
+              try {
+                webhookLogger.info(
+                  { leadId, name, phone },
+                  "Starting async enrichment for new C2S lead",
+                );
+
+                const result = await container.enrichment.enrichLead({
+                  leadId,
+                  name,
+                  phone,
+                  email,
+                  source,
+                  campaignName,
+                });
+
+                webhookLogger.info(
+                  { leadId, enriched: result.enriched, cpf: result.cpf },
+                  "C2S lead enrichment completed",
+                );
+              } catch (err) {
+                webhookLogger.error(
+                  { leadId, error: err },
+                  "C2S lead enrichment failed",
+                );
+              }
+            });
+            break;
+
+          case "on_update_lead":
+            // Only enrich if lead doesn't have CPF yet
+            // Check if there's already an enrichment message (simple heuristic)
+            webhookLogger.info(
+              { leadId },
+              "Lead updated - checking if enrichment needed",
+            );
+
+            // Queue for re-enrichment attempt
+            setImmediate(async () => {
+              try {
+                const result = await container.enrichment.enrichLead({
+                  leadId,
+                  name,
+                  phone,
+                  email,
+                  source,
+                  campaignName,
+                });
+
+                webhookLogger.info(
+                  { leadId, enriched: result.enriched },
+                  "C2S lead update enrichment completed",
+                );
+              } catch (err) {
+                webhookLogger.error(
+                  { leadId, error: err },
+                  "C2S lead update enrichment failed",
+                );
+              }
+            });
+            break;
+
+          case "on_close_lead":
+            // Log for analytics, no enrichment needed
+            webhookLogger.info(
+              {
+                leadId,
+                status: lead.attributes?.lead_status?.name,
+              },
+              "C2S lead closed",
+            );
+            break;
+        }
+
+        const duration = Date.now() - startTime;
+        webhookLogger.info({ leadId, duration }, "C2S webhook processed");
+
+        return {
+          success: true,
+          message: "Webhook received",
+          lead_id: leadId,
+          enrichment_status:
+            hook_action === "on_close_lead" ? undefined : "queued",
+        };
+      } catch (error) {
+        webhookLogger.error({ leadId, error }, "C2S webhook processing error");
+        set.status = 500;
+        return {
+          success: false,
+          message: "Internal server error",
+          lead_id: leadId,
+        };
+      }
+    },
+    {
+      body: t.Object({
+        hook_action: t.String(),
+        lead: t.Object({
+          id: t.String(),
+          internal_id: t.Optional(t.Number()),
+          attributes: t.Optional(
+            t.Object({
+              description: t.Optional(t.String()),
+              observation: t.Optional(t.String()),
+              customer: t.Optional(
+                t.Object({
+                  id: t.String(),
+                  name: t.String(),
+                  email: t.Optional(t.String()),
+                  phone: t.Optional(t.String()),
+                  phone2: t.Optional(t.String()),
+                }),
+              ),
+              seller: t.Optional(
+                t.Object({
+                  id: t.String(),
+                  name: t.String(),
+                  email: t.Optional(t.String()),
+                }),
+              ),
+              lead_source: t.Optional(
+                t.Object({
+                  id: t.Number(),
+                  name: t.String(),
+                }),
+              ),
+              lead_status: t.Optional(
+                t.Object({
+                  id: t.Number(),
+                  alias: t.String(),
+                  name: t.String(),
+                }),
+              ),
+              product: t.Optional(
+                t.Object({
+                  id: t.String(),
+                  description: t.String(),
+                }),
+              ),
+              created_at: t.Optional(t.String()),
+              updated_at: t.Optional(t.String()),
+            }),
+          ),
+        }),
+      }),
+    },
+  )
+  // Google Ads Webhook Handler
+  .post(
+    "/google-ads",
+    async ({ body, headers }) => {
+      const payload = body as GoogleAdsWebhookPayload;
+
+      webhookLogger.info(
+        { leadId: payload.lead_id, campaignName: payload.campaign_name },
+        "Google Ads webhook received",
+      );
+
+      // Check for idempotency
+      const existingEvent = await container.dbStorage.findWebhookEvent(
+        payload.lead_id,
+      );
+      if (existingEvent) {
+        webhookLogger.info(
+          { leadId: payload.lead_id },
+          "Webhook event already processed",
+        );
+        return {
+          data: {
+            status: "already_processed",
+            eventId: existingEvent.id,
+          },
+        };
+      }
+
+      // Create webhook event record
+      const event = await container.dbStorage.createWebhookEvent({
+        externalId: payload.lead_id,
         source: "google_ads",
-        rawData: payload as unknown as Record<string, unknown>,
+        eventType: "lead",
+        payload: payload as unknown as Record<string, unknown>,
+        status: "processing",
       });
 
-      // Update webhook event status
-      await container.dbStorage.updateWebhookEventStatus(event.id, "completed");
+      try {
+        // Extract user data from columns
+        const { name, phone, email } = extractUserData(payload);
 
-      webhookLogger.info(
-        { leadId: payload.lead_id, enriched: result.enriched },
-        "Webhook processed successfully",
-      );
+        // Store the lead
+        await container.dbStorage.upsertGoogleAdsLead({
+          leadId: payload.lead_id,
+          name,
+          phone,
+          email,
+          campaignId: payload.campaign_id,
+          campaignName: payload.campaign_name,
+          adGroupId: payload.ad_group_id,
+          adGroupName: payload.ad_group_name,
+          formId: payload.form_id,
+          formName: payload.form_name,
+          gclidValue: payload.gclid,
+          rawData: payload as unknown as Record<string, unknown>,
+          enrichmentStatus: "processing",
+        });
 
-      return {
-        data: {
-          status: "processed",
-          eventId: event.id,
-          enrichmentResult: result,
-        },
-      };
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      await container.dbStorage.updateWebhookEventStatus(
-        event.id,
-        "failed",
-        errorMessage,
-      );
+        // Run enrichment
+        const result = await container.enrichment.enrichLead({
+          leadId: payload.lead_id,
+          name,
+          phone,
+          email,
+          campaignId: payload.campaign_id,
+          campaignName: payload.campaign_name,
+          source: "google_ads",
+          rawData: payload as unknown as Record<string, unknown>,
+        });
 
-      webhookLogger.error(
-        { leadId: payload.lead_id, error },
-        "Webhook processing failed",
-      );
+        // Update webhook event status
+        await container.dbStorage.updateWebhookEventStatus(
+          event.id,
+          "completed",
+        );
 
-      throw AppError.internal("Failed to process webhook");
-    }
-  },
-  {
-    body: t.Object({
-      lead_id: t.String(),
-      campaign_id: t.Optional(t.String()),
-      campaign_name: t.Optional(t.String()),
-      ad_group_id: t.Optional(t.String()),
-      ad_group_name: t.Optional(t.String()),
-      form_id: t.Optional(t.String()),
-      form_name: t.Optional(t.String()),
-      gclid: t.Optional(t.String()),
-      user_column_data: t.Optional(
-        t.Array(
-          t.Object({
-            column_id: t.String(),
-            column_name: t.String(),
-            string_value: t.Optional(t.String()),
-          }),
+        webhookLogger.info(
+          { leadId: payload.lead_id, enriched: result.enriched },
+          "Webhook processed successfully",
+        );
+
+        return {
+          data: {
+            status: "processed",
+            eventId: event.id,
+            enrichmentResult: result,
+          },
+        };
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        await container.dbStorage.updateWebhookEventStatus(
+          event.id,
+          "failed",
+          errorMessage,
+        );
+
+        webhookLogger.error(
+          { leadId: payload.lead_id, error },
+          "Webhook processing failed",
+        );
+
+        throw AppError.internal("Failed to process webhook");
+      }
+    },
+    {
+      body: t.Object({
+        lead_id: t.String(),
+        campaign_id: t.Optional(t.String()),
+        campaign_name: t.Optional(t.String()),
+        ad_group_id: t.Optional(t.String()),
+        ad_group_name: t.Optional(t.String()),
+        form_id: t.Optional(t.String()),
+        form_name: t.Optional(t.String()),
+        gclid: t.Optional(t.String()),
+        user_column_data: t.Optional(
+          t.Array(
+            t.Object({
+              column_id: t.String(),
+              column_name: t.String(),
+              string_value: t.Optional(t.String()),
+            }),
+          ),
         ),
-      ),
-    }),
-  },
-);
+      }),
+    },
+  );

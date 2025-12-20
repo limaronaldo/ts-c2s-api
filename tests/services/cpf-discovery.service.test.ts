@@ -9,16 +9,16 @@ describe("CpfDiscoveryService", () => {
     test("tier 1: DBase is called first", () => {
       const callOrder: string[] = [];
 
-      // Simulate service call order
-      const tryDBase = () => {
+      // Simulate service call order - now returns { cpf, name }
+      const tryDBase = (): { cpf: string; name: string } | null => {
         callOrder.push("dbase");
-        return { cpf: "12345678909" };
+        return { cpf: "12345678909", name: "Test User" };
       };
-      const tryMimir = () => {
+      const tryMimir = (): { cpf: string; name: string } | null => {
         callOrder.push("mimir");
         return null;
       };
-      const tryDiretrix = () => {
+      const tryDiretrix = (): { cpf: string; name: string } | null => {
         callOrder.push("diretrix");
         return null;
       };
@@ -35,15 +35,15 @@ describe("CpfDiscoveryService", () => {
     test("tier 2: Mimir is called when DBase fails", () => {
       const callOrder: string[] = [];
 
-      const tryDBase = () => {
+      const tryDBase = (): { cpf: string; name: string } | null => {
         callOrder.push("dbase");
         return null;
       };
-      const tryMimir = () => {
+      const tryMimir = (): { cpf: string; name: string } | null => {
         callOrder.push("mimir");
-        return { cpf: "98765432100" };
+        return { cpf: "98765432100", name: "Test User" };
       };
-      const tryDiretrix = () => {
+      const tryDiretrix = (): { cpf: string; name: string } | null => {
         callOrder.push("diretrix");
         return null;
       };
@@ -59,17 +59,17 @@ describe("CpfDiscoveryService", () => {
     test("tier 3: Diretrix is called when DBase and Mimir fail", () => {
       const callOrder: string[] = [];
 
-      const tryDBase = () => {
+      const tryDBase = (): { cpf: string; name: string } | null => {
         callOrder.push("dbase");
         return null;
       };
-      const tryMimir = () => {
+      const tryMimir = (): { cpf: string; name: string } | null => {
         callOrder.push("mimir");
         return null;
       };
-      const tryDiretrix = () => {
+      const tryDiretrix = (): { cpf: string; name: string } | null => {
         callOrder.push("diretrix");
-        return { cpf: "11122233344" };
+        return { cpf: "11122233344", name: "Test User" };
       };
 
       let result = tryDBase();
@@ -109,16 +109,16 @@ describe("CpfDiscoveryService", () => {
     test("graceful error handling continues to next tier", () => {
       const callOrder: string[] = [];
 
-      const tryDBase = () => {
+      const tryDBase = (): { cpf: string; name: string } | null => {
         callOrder.push("dbase");
         throw new Error("Network error");
       };
-      const tryMimir = () => {
+      const tryMimir = (): { cpf: string; name: string } | null => {
         callOrder.push("mimir");
-        return { cpf: "12345678909" };
+        return { cpf: "12345678909", name: "Test User" };
       };
 
-      let result = null;
+      let result: { cpf: string; name: string } | null = null;
       try {
         result = tryDBase();
       } catch {

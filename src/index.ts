@@ -2,7 +2,11 @@ import { Elysia } from "elysia";
 import { healthRoute } from "./routes/health";
 import { errorHandler } from "./errors/app-error";
 import { logger } from "./utils/logger";
-import { hasFullConfig } from "./config";
+import { hasFullConfig, getConfig } from "./config";
+import {
+  startEnrichmentCron,
+  stopEnrichmentCron,
+} from "./jobs/enrichment-cron";
 
 const app = new Elysia().use(errorHandler).use(healthRoute);
 
@@ -23,6 +27,7 @@ if (hasFullConfig()) {
   const { activitiesRoute } = await import("./routes/activities");
   const { companyRoute } = await import("./routes/company");
   const { metricsRoute } = await import("./routes/metrics");
+  const { batchRoute } = await import("./routes/batch");
 
   app
     .use(leadsRoute)
@@ -35,7 +40,19 @@ if (hasFullConfig()) {
     .use(queuesRoute)
     .use(activitiesRoute)
     .use(companyRoute)
-    .use(metricsRoute);
+    .use(metricsRoute)
+    .use(batchRoute);
+
+  // Start cron job if enabled (RML-619)
+  const config = getConfig();
+  if (config.ENABLE_CRON) {
+    startEnrichmentCron({
+      enabled: true,
+      interval: config.CRON_INTERVAL,
+      batchSize: config.CRON_BATCH_SIZE,
+      delayMs: config.CRON_DELAY_MS,
+    });
+  }
 } else {
   logger.warn("Running in minimal mode - only health check available");
   logger.warn(
@@ -53,6 +70,7 @@ logger.info({ port, host }, `Server started on http://${host}:${port}`);
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
+  stopEnrichmentCron();
   const { closeDb } = await import("./db/client");
   await closeDb();
   process.exit(0);
@@ -60,6 +78,7 @@ process.on("SIGTERM", async () => {
 
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
+  stopEnrichmentCron();
   const { closeDb } = await import("./db/client");
   await closeDb();
   process.exit(0);

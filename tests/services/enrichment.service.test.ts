@@ -15,14 +15,20 @@ describe("EnrichmentService", () => {
     });
 
     test("uses CPF from lead attributes if present", () => {
-      const lead = { cpf: "12345678909", phone: "11987654321" };
+      const lead: { cpf?: string; phone: string } = {
+        cpf: "12345678909",
+        phone: "11987654321",
+      };
       const cpfSource = lead.cpf ? "lead" : "discovery";
 
       expect(cpfSource).toBe("lead");
     });
 
     test("discovers CPF from phone when not in lead", () => {
-      const lead = { phone: "11987654321", email: "test@example.com" };
+      const lead: { cpf?: string; phone: string; email: string } = {
+        phone: "11987654321",
+        email: "test@example.com",
+      };
       const discoveredCpf = "98765432100"; // From mock service
 
       // When lead has no CPF, discovery service is called
@@ -42,8 +48,8 @@ describe("EnrichmentService", () => {
     });
 
     test("skips when CPF not found from any source", () => {
-      const phoneLookupResult = null;
-      const emailLookupResult = null;
+      const phoneLookupResult: { cpf: string } | null = null;
+      const emailLookupResult: { cpf: string } | null = null;
 
       const cpf = phoneLookupResult?.cpf || emailLookupResult?.cpf || null;
       const skipReason = cpf ? null : "cpf_not_found";
