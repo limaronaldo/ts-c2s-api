@@ -148,7 +148,7 @@ export class EnrichmentService {
 
       // Build name mismatch warning if applicable
       const nameMismatchWarning = !nameMatches
-        ? `⚠️ ATENÇÃO: Nome diferente do registrado no Lead\n   Lead: ${name}\n   Base: ${foundName}\n\n`
+        ? `⚠️ Nome diferente do Lead: ${name}\n\n`
         : "";
 
       // Handle Work API timeout - proceed with partial enrichment
