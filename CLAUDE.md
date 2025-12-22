@@ -490,6 +490,138 @@ src/
 - Slack webhook alerts
 - Diretrix 400 error fix
 
+## C2S Message Format
+
+When a lead is enriched, a message is sent to C2S with the following simplified format:
+
+### Full Enrichment (CPF + Work API data)
+```
+CPF: 123.456.789-00
+Nome: João da Silva
+Nascimento: 15/03/1985
+Sexo: Masculino
+Mãe: Maria da Silva
+
+Renda: R$ 15.000,00
+Renda Presumida: R$ 18.000,00
+Patrimônio: R$ 500.000,00
+
+Profissão: Engenheiro Civil
+Escolaridade: Superior Completo
+Estado Civil: Casado
+
+📱 +55 11 99999-8888 (celular)
+📱 +55 11 3333-4444 (residencial)
+✉️ joao@email.com
+
+📍 Rua das Flores, 123
+   Apto 45
+   Jardins - São Paulo - SP
+   CEP: 01234-567
+
+🎯 Campanha: Google Ads - Imóveis Alto Padrão
+```
+
+### Simple (CPF not found)
+```
+Nome: João da Silva
+📱 +55 11 99999-8888
+✉️ joao@email.com
+
+🎯 Campanha: Google Ads - Imóveis
+```
+
+### Partial (CPF found, Work API timeout)
+```
+CPF: 123.456.789-00
+Nome: João da Silva
+📱 +55 11 99999-8888
+✉️ joao@email.com
+
+🎯 Campanha: Google Ads - Imóveis
+```
+
+### Name Mismatch Warning
+When the lead name doesn't match the CPF owner, a warning is prepended:
+```
+⚠️ Nome diferente do Lead: Joao Silva
+
+CPF: 123.456.789-00
+Nome: João Pedro da Silva Santos
+...
+```
+
+## Database Queries
+
+### Check enrichment stats by date
+```sql
+SELECT 
+  created_at::date as date, 
+  enrichment_status, 
+  COUNT(*) 
+FROM analytics.google_ads_leads 
+WHERE created_at >= '2025-12-21' 
+GROUP BY 1, 2 
+ORDER BY 1 DESC, 2;
+```
+
+### View enriched leads with party data
+```sql
+SELECT 
+  p.name, 
+  p.cpf_cnpj as cpf, 
+  p.income, 
+  g.created_at::time as time
+FROM analytics.google_ads_leads g
+JOIN analytics.parties p ON g.party_id = p.id
+WHERE g.created_at::date = '2025-12-21' 
+  AND g.enrichment_status = 'completed'
+ORDER BY g.created_at;
+```
+
+### Find high-income leads
+```sql
+SELECT 
+  p.name, 
+  p.cpf_cnpj, 
+  p.income::numeric as income,
+  g.created_at
+FROM analytics.google_ads_leads g
+JOIN analytics.parties p ON g.party_id = p.id
+WHERE p.income IS NOT NULL
+ORDER BY p.income::numeric DESC
+LIMIT 20;
+```
+
+### Check retry status
+```sql
+SELECT 
+  lead_id,
+  enrichment_status,
+  retry_count,
+  last_retry_at,
+  last_error
+FROM analytics.google_ads_leads
+WHERE enrichment_status IN ('partial', 'unenriched', 'failed')
+ORDER BY retry_count DESC;
+```
+
+## Performance Metrics
+
+### Typical enrichment stats (Dec 2025)
+- **Daily leads**: 15-20 new leads
+- **Success rate**: ~94% (15 enriched, 1 unenriched typical)
+- **CPF discovery rate**: ~95%
+- **Processing time**: 15-40 seconds per lead
+
+### Top leads by income (Dec 21, 2025)
+| Name | Income (R$) |
+|------|-------------|
+| Sergio Botelho Teixeira | 33,276 |
+| Jeanette Azar | 24,940 |
+| Francisco Roberto Soares Da Silva | 23,293 |
+| Marcelo Rodrigues | 21,276 |
+
 ## TODO
 
 ### Pending
