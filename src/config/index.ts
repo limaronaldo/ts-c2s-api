@@ -87,6 +87,27 @@ const configSchema = z.object({
     .transform((val) => val.toLowerCase() === "true" || val === "1"),
   RATE_LIMIT_MAX: z.coerce.number().default(100), // Max requests per window
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute window
+
+  // Web Insights settings (auto-insight generation)
+  ENABLE_WEB_INSIGHTS: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+  INSIGHT_MIN_CONFIDENCE: z.coerce.number().default(60), // 0-100
+
+  // CNPJ Lookup settings (business profile discovery)
+  ENABLE_CNPJ_LOOKUP: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // Google Custom Search settings (web search for insights)
+  GOOGLE_API_KEY: z.string().optional(),
+  GOOGLE_CSE_ID: z.string().optional(),
+  ENABLE_GOOGLE_SEARCH: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
 });
 
 export type Config = z.infer<typeof configSchema>;

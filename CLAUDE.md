@@ -440,7 +440,8 @@ src/
 │   ├── db-storage.service.ts
 │   ├── retry.service.ts    # Retry logic
 │   ├── alert.service.ts    # Slack alerts
-│   └── metrics.service.ts
+│   ├── metrics.service.ts
+│   └── web-insight.service.ts # Auto-insight generation
 ├── templates/
 │   └── dashboard.html.ts   # Dashboard HTML
 ├── utils/
@@ -451,7 +452,9 @@ src/
 │   ├── phone.ts
 │   ├── retry.ts
 │   ├── name-matcher.ts
-│   └── description-builder.ts
+│   ├── description-builder.ts
+│   ├── surname-analyzer.ts # Surname analysis for insights
+│   └── insight-formatter.ts # Insight message formatting
 ├── container.ts            # DI container
 └── index.ts                # Entry point
 ```
@@ -622,12 +625,316 @@ ORDER BY retry_count DESC;
 | Francisco Roberto Soares Da Silva | 23,293 |
 | Marcelo Rodrigues | 21,276 |
 
+## Lead Analysis & Insights Feature (Dec 24, 2025)
+
+### Overview
+Análise manual de leads do C2S com pesquisa web para identificar insights exclusivos sobre clientes de alto valor.
+
+### Scripts Criados
+
+```bash
+# Buscar últimos 25 leads do C2S
+bun run get-leads.ts
+
+# Analisar status de enriquecimento
+bun run analyze-leads.ts
+
+# Analisar leads com dados completos
+bun run analyze-all-leads.ts
+
+# Analisar melhores leads com renda
+bun run analyze-best-leads.ts
+
+# Enviar insights exclusivos ao C2S
+bun run send-insights.ts
+```
+
+### Insights Exclusivos Descobertos (24/12/2025)
+
+| Lead | Insight | Potencial |
+|------|---------|-----------|
+| **Dercio Falabella** | CEO do Grupo Hauzen (5 empresas imobiliárias, capital R$592k) | ⭐⭐⭐⭐⭐ |
+| **Lucia Leal Rudge** | Família do VP do Itaú, parente de Lala Rudge (influenciadora) | ⭐⭐⭐⭐⭐ |
+| **Luiz Godinho** | Casal dono da ARC Cosméticos (4 empresas, confirmado via CNPJ) | ⭐⭐⭐⭐ |
+| **Mario Roos** | Empresário sul-africano, Entrepreneur of the Year 2019 | ⭐⭐⭐⭐ |
+| **Nicolas Passafaro** | Filho de advogado condecorado (sobrenome raro no Brasil) | ⭐⭐⭐⭐ |
+| **Clarimundo Sant'anna** | Casal no Leblon/RJ, renda R$6.836/mês | ⭐⭐⭐⭐ |
+| **Francisco Soares** | Maior renda da lista: R$12.259/mês (R$147k/ano) | ⭐⭐⭐⭐⭐ |
+
+### Análise de Name Mismatch
+
+Quando o CPF encontrado pertence a pessoa diferente do lead, geralmente indica:
+
+| Padrão | Significado | Exemplo |
+|--------|-------------|---------|
+| Mesmo sobrenome | Cônjuge ou familiar | Luiz Godinho → Adriana Godinho |
+| Sobrenome raro | Família específica | Nicolas Passafaro → Leonardo Passafaro |
+| Nome junto | Email/nome concatenado | Martarabello → Marta + Rabello |
+| Endereço nobre | Patrimônio familiar | Sant'anna no Leblon |
+
+### Estatísticas de Enriquecimento (24/12/2025)
+
+```
+Total Leads: 25
+├── Full Match (mesma pessoa): 7 (28%)
+├── Name Mismatch (família/cônjuge): 14 (56%)
+├── Failed (CPF não encontrado): 3 (12%)
+└── Partial (dados incompletos): 1 (4%)
+
+CPF Discovery Rate: 84%
+Insights Enviados: 8 leads prioritários
+```
+
+### Mensagens Enviadas ao C2S
+
+Formato das mensagens de insight:
+```
+🔍 INSIGHT EXCLUSIVO - LEAD PRIORITÁRIO
+
+📊 Perfil Empresarial/Familiar:
+[Detalhes descobertos via pesquisa web]
+
+💰 Perfil Financeiro:
+[Renda, empresas, patrimônio]
+
+💡 Por que é valioso:
+[Análise de potencial]
+
+🎯 Recomendação:
+[Sugestão de abordagem]
+
+Fonte: [Fontes consultadas]
+```
+
+### Fontes de Pesquisa Utilizadas
+
+- **CNPJ Services** - Consulta de sócios e empresas
+- **Adv Dinâmico** - Perfis empresariais
+- **Escavador** - Processos e registros públicos
+- **LinkedIn** - Perfis profissionais
+- **EOY South Africa** - Entrepreneur of the Year
+- **Metrópoles/Caras** - Perfis de alta sociedade
+
+### Limitações Conhecidas
+
+1. **C2S PATCH API quebrada** - Endpoint `/integration/leads/:id` com `is_favorite` retorna erro Ruby
+2. **Alternativa implementada** - Tags VIP criadas para marcar leads prioritários
+3. **Pesquisa manual** - Insights requerem análise humana + web search
+
 ## TODO
 
 ### Pending
 - [ ] DBase IP whitelist for `37.16.3.251` - Requested Dec 20, follow up Dec 23
+- [ ] Reportar bug do C2S PATCH API (is_favorite retorna 422)
 
 ### Future
 - [ ] Add email alerts (complement Slack)
 - [ ] Dashboard date range filtering
 - [ ] Prometheus metrics endpoint
+
+## Auto-Insights Feature (Dec 24, 2025)
+
+### Overview
+
+Funcionalidade automática que gera insights sobre leads quando chegam via webhook. Analisa conexões familiares, sobrenomes raros, perfil empresarial e envia mensagens enriquecidas ao C2S.
+
+### Architecture
+
+```
+Lead chega via Webhook
+        ↓
+[1] Enrichment normal (CPF, renda, endereços)
+        ↓
+[2] WebInsightService (async, não bloqueia)
+    ├── Análise de sobrenome (raro/notável)
+    ├── Detecção de relação familiar
+    ├── Verificação de nome concatenado
+    ├── Análise de telefone internacional
+    └── Score de qualidade (tier)
+        ↓
+[3] Se insights >= confiança mínima:
+    └── C2SService.createMessage() com insight
+```
+
+### New Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/utils/surname-analyzer.ts` | Análise de sobrenomes raros e famílias notáveis |
+| `src/utils/insight-formatter.ts` | Formatação de mensagens de insight |
+| `src/services/web-insight.service.ts` | Serviço principal de geração de insights |
+| `src/services/cnpj-lookup.service.ts` | Busca de empresas via ReceitaWS/Brasil API |
+| `src/services/google-search.service.ts` | Pesquisa web via Google Custom Search |
+| `scripts/setup-google-search.sh` | Script para configurar Google Cloud API |
+| `tests/utils/surname-analyzer.test.ts` | Testes unitários do analisador |
+| `tests/utils/insight-formatter.test.ts` | Testes do formatador |
+
+### Modified Files
+
+| File | Changes |
+|------|---------|
+| `src/container.ts` | Registra `WebInsightService` |
+| `src/services/enrichment.service.ts` | Chama `generateInsightsAsync()` após enrichment |
+| `src/config/index.ts` | Novas variáveis `ENABLE_WEB_INSIGHTS`, `INSIGHT_MIN_CONFIDENCE`, `ENABLE_CNPJ_LOOKUP`, `GOOGLE_API_KEY`, `GOOGLE_CSE_ID` |
+
+### Configuration
+
+```bash
+# Habilitar insights automáticos (default: true)
+ENABLE_WEB_INSIGHTS=true
+
+# Confiança mínima para enviar insight (0-100, default: 60)
+INSIGHT_MIN_CONFIDENCE=60
+
+# Habilitar busca de CNPJ (default: true)
+ENABLE_CNPJ_LOOKUP=true
+
+# Google Custom Search (opcional)
+GOOGLE_API_KEY=your-api-key
+GOOGLE_CSE_ID=your-cse-id
+ENABLE_GOOGLE_SEARCH=true
+```
+
+### Insight Types Detected
+
+| Type | Detection Method | Example |
+|------|------------------|---------|
+| `business_owner` | CNPJ lookup (ReceitaWS/Casa dos Dados) | Dercio Falabella (5 empresas, R$592k capital) |
+| `notable_family` | Lista de famílias conhecidas | Rudge (VP Itaú), Safra (banqueiro) |
+| `rare_surname` | Lista de sobrenomes raros | Passafaro, Falabella, Trussardi |
+| `family_connection` | Mesmo sobrenome no lead vs CPF | Luiz Godinho → Adriana Godinho |
+| `high_income` | Renda >= R$10k/mês | Francisco Soares (R$12.259) |
+| `international` | Código de país != +55 | Mario Roos (+27 África do Sul) |
+| `multiple_properties` | >= 3 imóveis no CPF | 9 propriedades registradas |
+| `concatenated_name` | Nome sem espaço | Martarabello → Marta Rabello |
+
+### CNPJ Lookup Sources
+
+| Source | Type | Rate Limit | Features |
+|--------|------|------------|----------|
+| **ReceitaWS** | Gratuita | 3/min | Dados completos do CNPJ |
+| **Brasil API** | Gratuita | Fallback | Dados básicos do CNPJ |
+| **Casa dos Dados** | Gratuita | Limitada | Busca por nome do sócio |
+
+O sistema automaticamente:
+1. Busca empresas onde a pessoa é sócia/administradora
+2. Filtra apenas empresas ATIVAS
+3. Extrai capital social e função na empresa
+4. Respeita rate limits (3 requests/min para ReceitaWS)
+
+### Google Search Integration
+
+| Feature | Description |
+|---------|-------------|
+| **LinkedIn** | Encontra perfil profissional |
+| **Notícias** | Forbes, Exame, Valor, Estadão, etc. |
+| **Registros legais** | Escavador, JusBrasil |
+| **Empresas** | Extrai menções de empresas |
+
+**Configuração:**
+```bash
+# Rodar script de setup (cria projeto Google Cloud)
+chmod +x scripts/setup-google-search.sh
+./scripts/setup-google-search.sh
+
+# Adicionar secrets no Fly.io
+fly secrets set GOOGLE_API_KEY=your-api-key
+fly secrets set GOOGLE_CSE_ID=your-cse-id
+```
+
+**Limites:**
+- 100 queries/dia grátis
+- $5 por 1000 queries adicionais
+- Rate limit interno: 80/dia (margem de segurança)
+
+### Notable Families Database
+
+```typescript
+const NOTABLE_FAMILIES = {
+  'rudge': { context: 'Família bancária, VP Itaú', related: ['Lala Rudge'] },
+  'safra': { context: 'Família bancária', related: ['Banco Safra'] },
+  'lemann': { context: 'Sócios 3G Capital', related: ['AB InBev'] },
+  'marinho': { context: 'Organizações Globo', related: ['Roberto Marinho'] },
+  'setúbal': { context: 'Fundadores Itaú', related: ['Olavo Setúbal'] },
+  // ... mais famílias
+};
+```
+
+### Rare Surnames Database
+
+```typescript
+const RARE_SURNAMES = new Set([
+  'passafaro', 'falabella', 'trussardi', 'berlusconi',  // Italianos
+  'rosenbauer', 'rothschild',                           // Alemães
+  'azar', 'khoury', 'mansour',                          // Árabes
+  'roos', 'botha',                                      // Sul-africanos
+  'tidi', 'yamazaki',                                   // Japoneses
+  // ... mais sobrenomes
+]);
+```
+
+### Lead Scoring (Tiers)
+
+| Tier | Score | Criteria |
+|------|-------|----------|
+| 💎 Platinum | >= 70 | Notable family + high income + properties |
+| 🥇 Gold | >= 50 | Rare surname + high income OR family connection |
+| 🥈 Silver | >= 30 | International OR family connection |
+| 🥉 Bronze | < 30 | Basic lead without special indicators |
+
+### Insight Message Format
+
+```
+💎 INSIGHT AUTOMÁTICO
+
+📊 Perfil Descoberto:
+👑 Família Rudge
+   • Família bancária tradicional de São Paulo
+   • Membros conhecidos: José Rudge (ex-VP Itaú), Lala Rudge
+
+👨‍👩‍👧‍👦 Conexão Familiar Detectada
+   • Lead: Luiz Godinho
+   • CPF encontrado: Adriana Godinho
+   • Relação: Provável cônjuge
+
+💰 Indicadores:
+   • Renda: R$ 15.000/mês
+   • Imóveis: 5 registrados
+   • Endereços: 3 encontrados
+
+🎯 Recomendação:
+   LEAD PRIORITÁRIO! Família de alto perfil. Atendimento especial.
+
+⚡ Confiança: 92%
+```
+
+### Async Execution
+
+Insights são gerados de forma assíncrona após o enrichment:
+- **Não bloqueia** a resposta do webhook
+- Executa em **background** após C2S update
+- Falhas são **logadas** mas não afetam o fluxo principal
+
+```typescript
+// enrichment.service.ts
+if (this.enableWebInsights) {
+  this.generateInsightsAsync(leadId, name, personData, propertyData, phone, email, campaignName);
+}
+// Returns immediately, insight processing continues in background
+```
+
+### Testing
+
+```bash
+# Run insight-related tests
+bun test surname-analyzer
+bun test insight-formatter
+
+# Test cases cover:
+# - Surname extraction and analysis
+# - Family connection detection
+# - Concatenated name detection
+# - International phone detection
+# - Lead scoring calculation
+# - Message formatting
+```

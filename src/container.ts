@@ -7,6 +7,7 @@ import { CpfDiscoveryService } from "./services/cpf-discovery.service";
 import { EnrichmentService } from "./services/enrichment.service";
 import { DbStorageService } from "./services/db-storage.service";
 import { IbviPropertyService } from "./services/ibvi-property.service";
+import { WebInsightService } from "./services/web-insight.service";
 
 /**
  * Simple dependency injection container
@@ -22,6 +23,7 @@ class ServiceContainer {
   private _enrichment?: EnrichmentService;
   private _dbStorage?: DbStorageService;
   private _ibviProperty?: IbviPropertyService;
+  private _webInsight?: WebInsightService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -86,6 +88,13 @@ class ServiceContainer {
     return this._ibviProperty;
   }
 
+  get webInsight(): WebInsightService {
+    if (!this._webInsight) {
+      this._webInsight = new WebInsightService(this.c2s);
+    }
+    return this._webInsight;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -97,6 +106,7 @@ class ServiceContainer {
     this._enrichment = undefined;
     this._dbStorage = undefined;
     this._ibviProperty = undefined;
+    this._webInsight = undefined;
   }
 }
 

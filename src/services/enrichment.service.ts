@@ -13,6 +13,7 @@ import {
   IbviPropertyService,
   type PropertySummary,
 } from "./ibvi-property.service";
+import { WebInsightService, type LeadInsightData } from "./web-insight.service";
 import { recentCpfCache, processingLeadsCache } from "../utils/cache";
 import {
   normalizeIncome,
@@ -66,7 +67,9 @@ export class EnrichmentService {
   private c2sService: C2SService;
   private dbStorage: DbStorageService;
   private ibviPropertyService: IbviPropertyService;
+  private webInsightService: WebInsightService;
   private incomeMultiplier: number;
+  private enableWebInsights: boolean;
 
   constructor() {
     this.workApiService = new WorkApiService();
@@ -74,7 +77,10 @@ export class EnrichmentService {
     this.c2sService = new C2SService();
     this.dbStorage = new DbStorageService();
     this.ibviPropertyService = new IbviPropertyService();
-    this.incomeMultiplier = getConfig().INCOME_MULTIPLIER;
+    this.webInsightService = new WebInsightService(this.c2sService);
+    const config = getConfig();
+    this.incomeMultiplier = config.INCOME_MULTIPLIER;
+    this.enableWebInsights = config.ENABLE_WEB_INSIGHTS ?? true;
   }
 
   async enrichLead(lead: LeadData): Promise<EnrichmentResult> {
@@ -206,6 +212,19 @@ export class EnrichmentService {
         { leadId, cpf, c2sCustomerId: c2sResult.data.id },
         "Lead enrichment completed",
       );
+
+      // Generate and send insights (async, doesn't block response)
+      if (this.enableWebInsights) {
+        this.generateInsightsAsync(
+          leadId,
+          name,
+          personData,
+          propertyData,
+          phone,
+          email,
+          campaignName,
+        );
+      }
 
       return {
         success: true,
@@ -588,5 +607,69 @@ export class EnrichmentService {
         message: "Customer created with partial enrichment (Work API timeout)",
       };
     }
+  }
+
+  /**
+   * Generate and send insights asynchronously (doesn't block enrichment)
+   * This runs in the background after enrichment is complete
+   */
+  private generateInsightsAsync(
+    leadId: string,
+    leadName: string,
+    personData: WorkApiPerson,
+    propertyData: PropertySummary | null,
+    phone?: string,
+    email?: string,
+    campaignName?: string,
+  ): void {
+    // Run async without blocking
+    (async () => {
+      try {
+        const insightData: LeadInsightData = {
+          leadId,
+          leadName,
+          enrichedName: personData.nome,
+          phone,
+          email,
+          cpf: personData.cpf,
+          income: normalizeIncome(personData.renda, this.incomeMultiplier) ?? undefined,
+          presumedIncome: personData.rendaPresumida
+            ? normalizeIncome(personData.rendaPresumida, this.incomeMultiplier) ?? undefined
+            : undefined,
+          propertyCount: propertyData?.totalProperties ?? 0,
+          addressCount: personData.enderecos?.length ?? 0,
+          campaignName,
+        };
+
+        // Check if insights should be generated
+        if (!this.webInsightService.shouldGenerateInsights(insightData)) {
+          enrichmentLogger.debug(
+            { leadId },
+            "No significant insights to generate for lead",
+          );
+          return;
+        }
+
+        // Generate and send insights
+        const result = await this.webInsightService.generateAndSendInsights(insightData);
+
+        if (result.messageSent) {
+          enrichmentLogger.info(
+            { leadId, insightCount: result.insightCount, tier: result.tier },
+            "Insights sent to C2S",
+          );
+        } else if (result.generated) {
+          enrichmentLogger.debug(
+            { leadId, insightCount: result.insightCount },
+            "Insights generated but not sent (low confidence or error)",
+          );
+        }
+      } catch (error) {
+        enrichmentLogger.error(
+          { leadId, error },
+          "Failed to generate insights (non-blocking)",
+        );
+      }
+    })();
   }
 }
