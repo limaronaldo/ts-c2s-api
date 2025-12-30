@@ -461,6 +461,33 @@ src/
 
 ## Changelog
 
+### December 29, 2025
+
+#### Message Logging
+- Added full message content logging to C2S service
+- Logs include leadId, message length, and full message content
+- Helps debug enrichment and insight message formatting
+
+### December 24-25, 2025
+
+#### Auto-Insights Feature
+- Added automatic insight generation for incoming leads
+- Surname analyzer detects rare surnames and notable families
+- CNPJ lookup via ReceitaWS/Brasil API/Casa dos Dados
+- Google Custom Search integration for LinkedIn, news, companies
+- Async execution - doesn't block webhook response
+- Lead scoring with Bronze/Silver/Gold/Platinum tiers
+
+#### New Services
+- `WebInsightService` - Main insight orchestrator
+- `CnpjLookupService` - Company search by owner name
+- `GoogleSearchService` - Web search with 90/day rate limit
+
+#### Configuration
+- `ENABLE_WEB_INSIGHTS` - Toggle insights (default: true)
+- `INSIGHT_MIN_CONFIDENCE` - Min score to send (default: 60)
+- `GOOGLE_API_KEY` / `GOOGLE_CSE_ID` - Google Search credentials
+
 ### December 20, 2025
 
 #### Dashboard Enhancements
@@ -721,6 +748,32 @@ Fonte: [Fontes consultadas]
 2. **Alternativa implementada** - Tags VIP criadas para marcar leads prioritários
 3. **Pesquisa manual** - Insights requerem análise humana + web search
 
+## Message Logging (Dec 29, 2025)
+
+All messages sent to C2S are now logged for debugging purposes:
+
+```bash
+# View message content in logs
+fly logs | grep "Message content sent to C2S"
+```
+
+**Log format:**
+```json
+{
+  "level": 30,
+  "module": "c2s",
+  "leadId": "abc123",
+  "messageLength": 450,
+  "messageContent": "CPF: 123.456.789-00\nNome: João...",
+  "msg": "Message content sent to C2S"
+}
+```
+
+This helps verify:
+- Enrichment message format and content
+- Insight message was generated and sent
+- Name mismatch warnings are being added
+
 ## TODO
 
 ### Pending
@@ -845,7 +898,11 @@ fly secrets set GOOGLE_CSE_ID=your-cse-id
 **Limites:**
 - 100 queries/dia grátis
 - $5 por 1000 queries adicionais
-- Rate limit interno: 80/dia (margem de segurança)
+- Rate limit interno: 90/dia (margem de segurança)
+
+**Projeto configurado:**
+- Google Cloud Project: `propane-landing-434018-h2`
+- CSE ID: `9354176aee2084dec`
 
 ### Notable Families Database
 

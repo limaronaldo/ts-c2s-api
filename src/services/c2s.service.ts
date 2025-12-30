@@ -329,7 +329,8 @@ export class C2SService {
     message: string,
     type?: string,
   ): Promise<unknown> {
-    c2sLogger.info({ leadId }, "Adding message to lead");
+    c2sLogger.info({ leadId, messageLength: message.length }, "Adding message to lead");
+    c2sLogger.info({ leadId, messageContent: message }, "Message content sent to C2S");
     // C2S API expects {body: string} not {message: string}
     const payload: { body: string; type?: string } = { body: message };
     if (type) payload.type = type;
