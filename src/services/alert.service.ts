@@ -90,11 +90,46 @@ export class AlertService {
     }
 
     const config = getConfig();
+    const severity = this.getSeverity(type);
+    const message = this.getMessage(type, details);
+
+    // Slack webhook format
+    const slackPayload = {
+      text: `${severity === "critical" ? "🚨" : "⚠️"} *${type.toUpperCase().replace(/_/g, " ")}*`,
+      blocks: [
+        {
+          type: "header",
+          text: {
+            type: "plain_text",
+            text: `${severity === "critical" ? "🚨" : "⚠️"} ${type.toUpperCase().replace(/_/g, " ")}`,
+            emoji: true,
+          },
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: message,
+          },
+        },
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `*App:* ts-c2s-api | *Env:* ${config.NODE_ENV} | *Time:* ${new Date().toISOString()}`,
+            },
+          ],
+        },
+      ],
+    };
+
+    // Also keep internal payload for logging
     const payload: AlertPayload = {
       type,
       timestamp: new Date().toISOString(),
-      severity: this.getSeverity(type),
-      message: this.getMessage(type, details),
+      severity,
+      message,
       details,
       app: "ts-c2s-api",
       environment: config.NODE_ENV,
@@ -104,7 +139,7 @@ export class AlertService {
       const response = await fetch(this.webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(slackPayload),
         signal: AbortSignal.timeout(5000),
       });
 
