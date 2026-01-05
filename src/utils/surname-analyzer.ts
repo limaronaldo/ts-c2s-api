@@ -42,12 +42,29 @@ const RARE_SURNAMES = new Set([
   'armani',
   'versace',
   'bulgari',
+  'benetton',
+  'agnelli',
+  'beretta',
+  'lavazza',
+  'barilla',
+  'fendi',
+  'gucci',
+  'prada',
+  'zegna',
 
   // Alemães raros
   'rosenbauer',
   'schwarzenegger',
   'steinhoff',
   'rothschild',
+  'krupp',
+  'siemens',
+  'bosch',
+  'porsche',
+  'quandt',
+  'würth',
+  'henkel',
+  'merck',
 
   // Árabes/Libaneses raros
   'azar',
@@ -55,26 +72,122 @@ const RARE_SURNAMES = new Set([
   'haddad',
   'mansour',
   'sabbagh',
+  'jafet',
+  'maluf',
+  'kassab',
+  'temer',
+  'skaf',
+  'gebara',
+  'mattar',
+  'zeitune',
+  'bittar',
 
   // Portugueses raros
   'figueiredo',
   'mascarenhas',
   'vasconcellos',
+  'bragança',
+  'orleans',
 
   // Holandeses/Africanos
   'roos',
   'botha',
   'van der berg',
+  'de klerk',
+  'mandela',
 
   // Japoneses raros
   'tidi',
   'yamazaki',
   'nakashima',
+  'watanabe',
+  'takahashi',
+  'tanaka',
+  'yamamoto',
+  'kobayashi',
+  'matsumoto',
+  'fujimori',
+
+  // Coreanos
+  'kim',
+  'park',
+  'lee',
+  'choi',
+  'jung',
+  'kang',
+  'yoon',
+  'jang',
+  'han',
+  'shin',
+  'kwon',
+  'hwang',
+
+  // Chineses
+  'wang',
+  'zhang',
+  'chen',
+  'liu',
+  'huang',
+  'zhou',
+  'wu',
+  'xu',
+  'sun',
+  'ma',
+  'zhu',
+  'lin',
+  'chang',
+  'wong',
+  'lam',
+  'chan',
+  'tang',
+  'fong',
+
+  // Indianos
+  'patel',
+  'sharma',
+  'singh',
+  'kumar',
+  'gupta',
+  'modi',
+  'gandhi',
+  'ambani',
+  'tata',
+  'birla',
+  'mittal',
+  'bajaj',
+  'mahindra',
+  'godrej',
+
+  // Judeus/Israelenses
+  'cohen',
+  'levy',
+  'levi',
+  'goldberg',
+  'rosenberg',
+  'steinberg',
+  'weinberg',
+  'blumenfeld',
+  'friedman',
+  'klabin',
+  'lafer',
+  'mindlin',
+  'horn',
+  'feffer',
+
+  // Espanhóis raros
+  'botín',
+  'ortega',
+  'florentino',
 
   // Outros raros
   'rabello',
   'botelho',
   'leal',
+  'penteado',
+  'alvim',
+  'arruda',
+  'peixoto',
+  'buarque',
 ]);
 
 // Famílias notáveis do Brasil com contexto
@@ -82,6 +195,7 @@ const NOTABLE_FAMILIES: Record<
   string,
   { context: string; relatedPeople: string[]; sector: string }
 > = {
+  // ========== BANCÁRIO/FINANCEIRO ==========
   rudge: {
     context: 'Família bancária tradicional de São Paulo',
     relatedPeople: ['José Rudge (ex-VP Itaú)', 'Lala Rudge (influenciadora/herdeira)'],
@@ -92,17 +206,12 @@ const NOTABLE_FAMILIES: Record<
     relatedPeople: ['Joseph Safra', 'Banco Safra'],
     sector: 'Bancário',
   },
-  lemann: {
-    context: 'Família empresarial, sócios da 3G Capital',
-    relatedPeople: ['Jorge Paulo Lemann', 'AB InBev', 'Kraft Heinz'],
-    sector: 'Investimentos/Bebidas',
-  },
-  marinho: {
-    context: 'Família proprietária das Organizações Globo',
-    relatedPeople: ['Roberto Marinho', 'João Roberto Marinho'],
-    sector: 'Mídia/Comunicação',
-  },
   setúbal: {
+    context: 'Família bancária, fundadores do Itaú',
+    relatedPeople: ['Olavo Setúbal', 'Roberto Setúbal'],
+    sector: 'Bancário',
+  },
+  setubal: {
     context: 'Família bancária, fundadores do Itaú',
     relatedPeople: ['Olavo Setúbal', 'Roberto Setúbal'],
     sector: 'Bancário',
@@ -112,20 +221,76 @@ const NOTABLE_FAMILIES: Record<
     relatedPeople: ['Walther Moreira Salles', 'Banco Itaú'],
     sector: 'Bancário',
   },
+  villela: {
+    context: 'Família acionista do Itaú Unibanco',
+    relatedPeople: ['Alfredo Egydio Arruda Villela'],
+    sector: 'Bancário',
+  },
+  simonsen: {
+    context: 'Família de economistas e empresários',
+    relatedPeople: ['Mário Henrique Simonsen'],
+    sector: 'Economia/Finanças',
+  },
+  esteves: {
+    context: 'Família do BTG Pactual',
+    relatedPeople: ['André Esteves', 'BTG Pactual'],
+    sector: 'Bancário/Investimentos',
+  },
+
+  // ========== INVESTIMENTOS/PRIVATE EQUITY ==========
+  lemann: {
+    context: 'Família empresarial, sócios da 3G Capital',
+    relatedPeople: ['Jorge Paulo Lemann', 'AB InBev', 'Kraft Heinz'],
+    sector: 'Investimentos/Bebidas',
+  },
+  sicupira: {
+    context: 'Sócio da 3G Capital',
+    relatedPeople: ['Carlos Alberto Sicupira', 'AB InBev'],
+    sector: 'Investimentos',
+  },
+  telles: {
+    context: 'Sócio da 3G Capital',
+    relatedPeople: ['Marcel Telles', 'AB InBev'],
+    sector: 'Investimentos',
+  },
+  garantia: {
+    context: 'Fundadores do Banco Garantia',
+    relatedPeople: ['Lemann, Sicupira, Telles'],
+    sector: 'Investimentos',
+  },
+
+  // ========== MÍDIA/COMUNICAÇÃO ==========
+  marinho: {
+    context: 'Família proprietária das Organizações Globo',
+    relatedPeople: ['Roberto Marinho', 'João Roberto Marinho'],
+    sector: 'Mídia/Comunicação',
+  },
+  civita: {
+    context: 'Família fundadora do Grupo Abril',
+    relatedPeople: ['Victor Civita', 'Roberto Civita'],
+    sector: 'Mídia/Editora',
+  },
+  frias: {
+    context: 'Família controladora do Grupo Folha',
+    relatedPeople: ['Octavio Frias de Oliveira', 'Folha de S.Paulo'],
+    sector: 'Mídia/Jornalismo',
+  },
+  mesquita: {
+    context: 'Família proprietária do Estadão',
+    relatedPeople: ['Julio de Mesquita', 'O Estado de S. Paulo'],
+    sector: 'Mídia/Jornalismo',
+  },
+
+  // ========== INDUSTRIAL ==========
   ermírio: {
     context: 'Família fundadora do Grupo Votorantim',
     relatedPeople: ['Antônio Ermírio de Moraes', 'Grupo Votorantim'],
     sector: 'Industrial/Mineração',
   },
-  diniz: {
-    context: 'Família fundadora do Grupo Pão de Açúcar',
-    relatedPeople: ['Abilio Diniz', 'Grupo Pão de Açúcar'],
-    sector: 'Varejo',
-  },
-  batista: {
-    context: 'Família fundadora da JBS',
-    relatedPeople: ['Joesley Batista', 'Wesley Batista', 'JBS'],
-    sector: 'Alimentos/Carnes',
+  votorantim: {
+    context: 'Grupo industrial brasileiro',
+    relatedPeople: ['Família Ermírio de Moraes'],
+    sector: 'Industrial',
   },
   steinbruch: {
     context: 'Família controladora da CSN',
@@ -137,15 +302,246 @@ const NOTABLE_FAMILIES: Record<
     relatedPeople: ['Jorge Gerdau', 'Grupo Gerdau'],
     sector: 'Siderurgia',
   },
-  simonsen: {
-    context: 'Família de economistas e empresários',
-    relatedPeople: ['Mário Henrique Simonsen'],
-    sector: 'Economia/Finanças',
+  camargo: {
+    context: 'Família fundadora da Camargo Corrêa',
+    relatedPeople: ['Sebastião Camargo', 'Camargo Corrêa'],
+    sector: 'Construção/Infraestrutura',
   },
-  villela: {
-    context: 'Família acionista do Itaú Unibanco',
-    relatedPeople: ['Alfredo Egydio Arruda Villela'],
-    sector: 'Bancário',
+  odebrecht: {
+    context: 'Família fundadora da Odebrecht',
+    relatedPeople: ['Norberto Odebrecht', 'Marcelo Odebrecht'],
+    sector: 'Construção/Infraestrutura',
+  },
+  andrade: {
+    context: 'Família da Andrade Gutierrez',
+    relatedPeople: ['Grupo Andrade Gutierrez'],
+    sector: 'Construção/Infraestrutura',
+  },
+
+  // ========== VAREJO ==========
+  diniz: {
+    context: 'Família fundadora do Grupo Pão de Açúcar',
+    relatedPeople: ['Abilio Diniz', 'Grupo Pão de Açúcar'],
+    sector: 'Varejo',
+  },
+  klein: {
+    context: 'Família fundadora das Casas Bahia',
+    relatedPeople: ['Samuel Klein', 'Michael Klein', 'Via Varejo'],
+    sector: 'Varejo',
+  },
+  trajano: {
+    context: 'Família controladora do Magazine Luiza',
+    relatedPeople: ['Luiza Helena Trajano', 'Magazine Luiza'],
+    sector: 'Varejo',
+  },
+  feffer: {
+    context: 'Família controladora da Suzano',
+    relatedPeople: ['David Feffer', 'Suzano Papel e Celulose'],
+    sector: 'Papel e Celulose',
+  },
+
+  // ========== ALIMENTOS/AGRO ==========
+  batista: {
+    context: 'Família fundadora da JBS',
+    relatedPeople: ['Joesley Batista', 'Wesley Batista', 'JBS'],
+    sector: 'Alimentos/Carnes',
+  },
+  maggi: {
+    context: 'Família do agronegócio',
+    relatedPeople: ['Blairo Maggi', 'Grupo Amaggi'],
+    sector: 'Agronegócio',
+  },
+  ometto: {
+    context: 'Família do setor sucroalcooleiro',
+    relatedPeople: ['Rubens Ometto', 'Cosan', 'Raízen'],
+    sector: 'Energia/Açúcar',
+  },
+
+  // ========== IMOBILIÁRIO (São Paulo) ==========
+  horn: {
+    context: 'Família do mercado imobiliário de luxo em SP',
+    relatedPeople: ['Adolpho Lindenberg Horn', 'Lindenberg Construtora'],
+    sector: 'Imobiliário',
+  },
+  lindenberg: {
+    context: 'Construtora de alto padrão em São Paulo',
+    relatedPeople: ['Adolpho Lindenberg', 'Lindenberg Construtora'],
+    sector: 'Imobiliário',
+  },
+  cyrela: {
+    context: 'Uma das maiores incorporadoras do Brasil',
+    relatedPeople: ['Elie Horn', 'Cyrela Brazil Realty'],
+    sector: 'Imobiliário',
+  },
+  safdie: {
+    context: 'Família de incorporadores em SP',
+    relatedPeople: ['Alberto Safdie', 'Safdie Construtora'],
+    sector: 'Imobiliário',
+  },
+  trisul: {
+    context: 'Incorporadora de São Paulo',
+    relatedPeople: ['Jorge Cury', 'Trisul'],
+    sector: 'Imobiliário',
+  },
+  rossi: {
+    context: 'Família de incorporadores',
+    relatedPeople: ['Rossi Residencial'],
+    sector: 'Imobiliário',
+  },
+  even: {
+    context: 'Incorporadora de alto padrão',
+    relatedPeople: ['Carlos Terepins', 'Even Construtora'],
+    sector: 'Imobiliário',
+  },
+  eztec: {
+    context: 'Incorporadora de São Paulo',
+    relatedPeople: ['Ernesto Zarzur', 'EZTEC'],
+    sector: 'Imobiliário',
+  },
+  zarzur: {
+    context: 'Família fundadora da EZTEC',
+    relatedPeople: ['Ernesto Zarzur', 'EZTEC'],
+    sector: 'Imobiliário',
+  },
+  gafisa: {
+    context: 'Incorporadora tradicional',
+    relatedPeople: ['Gafisa S.A.'],
+    sector: 'Imobiliário',
+  },
+  tecnisa: {
+    context: 'Incorporadora de São Paulo',
+    relatedPeople: ['Meyer Nigri', 'Tecnisa'],
+    sector: 'Imobiliário',
+  },
+  nigri: {
+    context: 'Família da Tecnisa',
+    relatedPeople: ['Meyer Nigri', 'Tecnisa'],
+    sector: 'Imobiliário',
+  },
+  wtorre: {
+    context: 'Construtora de grandes empreendimentos',
+    relatedPeople: ['Walter Torre Jr', 'WTorre'],
+    sector: 'Imobiliário',
+  },
+  torre: {
+    context: 'Construtora de grandes empreendimentos',
+    relatedPeople: ['Walter Torre Jr', 'WTorre'],
+    sector: 'Imobiliário',
+  },
+  jhsf: {
+    context: 'Incorporadora de alto luxo',
+    relatedPeople: ['José Auriemo', 'JHSF', 'Fazenda Boa Vista', 'Shopping Cidade Jardim'],
+    sector: 'Imobiliário/Luxo',
+  },
+  auriemo: {
+    context: 'Família fundadora da JHSF',
+    relatedPeople: ['José Auriemo Neto', 'JHSF'],
+    sector: 'Imobiliário/Luxo',
+  },
+  yuny: {
+    context: 'Incorporadora de São Paulo',
+    relatedPeople: ['Yuny Incorporadora'],
+    sector: 'Imobiliário',
+  },
+  stan: {
+    context: 'Incorporadora de alto padrão',
+    relatedPeople: ['Stan Desenvolvimento Imobiliário'],
+    sector: 'Imobiliário',
+  },
+  tegra: {
+    context: 'Incorporadora do Brookfield',
+    relatedPeople: ['Tegra Incorporadora'],
+    sector: 'Imobiliário',
+  },
+  kallas: {
+    context: 'Incorporadora de São Paulo',
+    relatedPeople: ['Kallas Incorporações'],
+    sector: 'Imobiliário',
+  },
+  helbor: {
+    context: 'Incorporadora nacional',
+    relatedPeople: ['Helbor Empreendimentos'],
+    sector: 'Imobiliário',
+  },
+  ecoville: {
+    context: 'Incorporadora de alto padrão',
+    relatedPeople: ['Ecoville Urbanismo'],
+    sector: 'Imobiliário',
+  },
+
+  // ========== AVIAÇÃO/TRANSPORTE ==========
+  constantino: {
+    context: 'Família fundadora da Gol Linhas Aéreas',
+    relatedPeople: ['Constantino de Oliveira Jr', 'Gol'],
+    sector: 'Aviação',
+  },
+  amaro: {
+    context: 'Família fundadora da TAM',
+    relatedPeople: ['Rolim Amaro', 'TAM Linhas Aéreas'],
+    sector: 'Aviação',
+  },
+
+  // ========== TECNOLOGIA ==========
+  vélez: {
+    context: 'Fundador do Nubank',
+    relatedPeople: ['David Vélez', 'Nubank'],
+    sector: 'Fintech',
+  },
+  velez: {
+    context: 'Fundador do Nubank',
+    relatedPeople: ['David Vélez', 'Nubank'],
+    sector: 'Fintech',
+  },
+  krieger: {
+    context: 'Fundador do PagSeguro',
+    relatedPeople: ['Luiz Frias', 'PagSeguro'],
+    sector: 'Fintech',
+  },
+
+  // ========== SAÚDE ==========
+  bueno: {
+    context: 'Família fundadora da Amil',
+    relatedPeople: ['Edson Bueno', 'Amil', 'Dasa'],
+    sector: 'Saúde',
+  },
+  moll: {
+    context: 'Família fundadora da Rede D\'Or',
+    relatedPeople: ['Jorge Moll', 'Rede D\'Or São Luiz'],
+    sector: 'Saúde',
+  },
+
+  // ========== BEBIDAS ==========
+  schincariol: {
+    context: 'Família fundadora da Schincariol',
+    relatedPeople: ['Adriano Schincariol', 'Cervejaria Schincariol'],
+    sector: 'Bebidas',
+  },
+  johannpeter: {
+    context: 'Família controladora da Gerdau',
+    relatedPeople: ['Jorge Gerdau Johannpeter'],
+    sector: 'Siderurgia',
+  },
+
+  // ========== LIBANESES EMPRESÁRIOS ==========
+  jafet: {
+    context: 'Família tradicional de empresários libaneses',
+    relatedPeople: ['Nami Jafet', 'Basílio Jafet'],
+    sector: 'Diversificado',
+  },
+  klabin: {
+    context: 'Família da indústria de papel',
+    relatedPeople: ['Klabin S.A.'],
+    sector: 'Papel e Celulose',
+  },
+  lafer: {
+    context: 'Família de industriais e políticos',
+    relatedPeople: ['Celso Lafer', 'Horacio Lafer'],
+    sector: 'Industrial/Político',
+  },
+  mindlin: {
+    context: 'Família de empresários e colecionadores',
+    relatedPeople: ['José Mindlin', 'Brasilpar'],
+    sector: 'Finanças/Cultura',
   },
 };
 

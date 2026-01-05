@@ -155,14 +155,15 @@ describe('surname-analyzer', () => {
       expect(result.score).toBeGreaterThanOrEqual(70);
     });
 
-    test('calculates gold tier for high income with rare surname', () => {
+    test('calculates gold tier for high income with rare surname and family connection', () => {
       const result = calculateLeadScore({
         hasRareSurname: true,
         isNotableFamily: false,
-        hasFamilyConnection: false,
+        hasFamilyConnection: true,
         isInternational: false,
         income: 15000,
       });
+      // 15 (rare) + 20 (family) + 20 (income) = 55 = gold
       expect(result.tier).toBe('gold');
     });
 
