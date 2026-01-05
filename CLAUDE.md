@@ -276,21 +276,47 @@ GET /dashboard/export?status=partial&format=csv
 ### Alert Types
 | Type | Severity | Trigger |
 |------|----------|---------|
-| `lead_max_retries` | warning | Lead fails after 5 retries |
-| `high_error_rate` | critical | Error rate exceeds 50% |
-| `service_down` | critical | External service down for 5+ min |
+| `lead_max_retries` | ⚠️ warning | Lead fails after 5 retries |
+| `high_error_rate` | 🚨 critical | Error rate exceeds 50% |
+| `service_down` | 🚨 critical | External service down for 5+ min |
 
-### Slack Payload Format
-```json
-{
-  "type": "lead_max_retries",
-  "timestamp": "2025-12-20T23:55:18.287Z",
-  "severity": "warning",
-  "message": "Lead lead-123 failed after 5 retries: CPF not found",
-  "details": { "leadId": "lead-123", "retryCount": 5 },
-  "app": "ts-c2s-api",
-  "environment": "production"
-}
+### Slack Integration
+
+Alerts are sent to Slack using the Incoming Webhooks format with blocks:
+
+```
+⚠️ LEAD MAX RETRIES
+────────────────────
+Lead test-123 failed after 5 retries: CPF not found
+
+App: ts-c2s-api | Env: production | Time: 2026-01-05T18:56:00Z
+```
+
+### Configuration
+```bash
+# Set webhook URL in Fly.io
+fly secrets set ALERT_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz
+
+# Optional settings (defaults shown)
+ALERT_RATE_LIMIT_MINUTES=5      # Min time between same alert type
+ALERT_ERROR_THRESHOLD=50        # Error rate % to trigger alert
+ALERT_ERROR_WINDOW_MINUTES=60   # Window for error rate calculation
+ALERT_SERVICE_DOWN_MINUTES=5    # Time before service_down alert
+```
+
+### Testing Alerts
+```bash
+# Send test alert directly to Slack
+curl -X POST "https://hooks.slack.com/services/xxx/yyy/zzz" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "⚠️ TEST ALERT",
+    "blocks": [
+      {"type": "header", "text": {"type": "plain_text", "text": "⚠️ TEST ALERT", "emoji": true}},
+      {"type": "section", "text": {"type": "mrkdwn", "text": "Test message from ts-c2s-api"}},
+      {"type": "context", "elements": [{"type": "mrkdwn", "text": "*App:* ts-c2s-api | *Env:* test"}]}
+    ]
+  }'
 ```
 
 ## Rate Limiting
@@ -460,6 +486,18 @@ src/
 ```
 
 ## Changelog
+
+### January 5, 2026
+
+#### Slack Alerts Fix
+- Fixed Slack webhook format (was returning 400 error)
+- Changed from generic JSON to Slack blocks format
+- Added header, section, and context blocks
+- Alerts now display properly in Slack channel
+
+#### Linear Integration
+- Created 4 feature issues in Linear (RML-795 to RML-798)
+- Email alerts, Dashboard date filter, Prometheus metrics, Surname database expansion
 
 ### December 29, 2025
 
