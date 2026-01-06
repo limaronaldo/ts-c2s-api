@@ -2,15 +2,21 @@
  * Enrichment Cron Job
  * RML-619: Scheduled enrichment for pending leads
  * RML-639: Added retry logic for failed leads
+ * RML-809: Smart scheduling based on time of day
  *
- * Runs every 15 minutes (configurable) to:
+ * Smart Schedule (America/Sao_Paulo timezone):
+ * - 09:00-19:00: Every 5 minutes (business hours)
+ * - 19:00-23:30: Every 20 minutes (evening)
+ * - 23:30-06:00: Every 60 minutes (night)
+ * - 06:00-09:00: Every 20 minutes (early morning)
+ *
+ * Features:
  * - Fetch recent unenriched leads from C2S
  * - Retry failed leads with exponential backoff
  * - Enrich each with rate limiting
  * - Log results for monitoring
  */
 
-import { Cron } from "croner";
 import { container } from "../container";
 import { logger } from "../utils/logger";
 import { C2SService } from "../services/c2s.service";
@@ -33,13 +39,52 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export interface CronJobConfig {
   enabled: boolean;
-  interval: string; // Cron expression (e.g., "*/15 * * * *")
+  interval: string; // Cron expression (legacy, now uses smart scheduling)
   batchSize: number; // Number of leads to process per run
   delayMs: number; // Delay between enrichments
 }
 
-let cronJob: Cron | null = null;
+// Smart interval settings (RML-809)
+const SMART_INTERVALS = {
+  businessHours: 5 * 60 * 1000,   // 5 minutes (09:00-19:00)
+  evening: 20 * 60 * 1000,        // 20 minutes (19:00-23:30)
+  night: 60 * 60 * 1000,          // 60 minutes (23:30-06:00)
+  earlyMorning: 20 * 60 * 1000,   // 20 minutes (06:00-09:00)
+};
+
+let smartCronTimer: ReturnType<typeof setTimeout> | null = null;
 let isRunning = false;
+let isStopped = false;
+
+/**
+ * Get the current interval based on São Paulo time (RML-809)
+ */
+function getSmartInterval(): { intervalMs: number; period: string } {
+  // Get current time in São Paulo
+  const now = new Date();
+  const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const hours = spTime.getHours();
+  const minutes = spTime.getMinutes();
+  const timeInMinutes = hours * 60 + minutes;
+
+  // 09:00-19:00 (540-1140 minutes): Business hours - 5 min
+  if (timeInMinutes >= 540 && timeInMinutes < 1140) {
+    return { intervalMs: SMART_INTERVALS.businessHours, period: "business" };
+  }
+
+  // 19:00-23:30 (1140-1410 minutes): Evening - 20 min
+  if (timeInMinutes >= 1140 && timeInMinutes < 1410) {
+    return { intervalMs: SMART_INTERVALS.evening, period: "evening" };
+  }
+
+  // 23:30-06:00 (1410-1440 or 0-360 minutes): Night - 60 min
+  if (timeInMinutes >= 1410 || timeInMinutes < 360) {
+    return { intervalMs: SMART_INTERVALS.night, period: "night" };
+  }
+
+  // 06:00-09:00 (360-540 minutes): Early morning - 20 min
+  return { intervalMs: SMART_INTERVALS.earlyMorning, period: "early_morning" };
+}
 
 // Retry delays in milliseconds (exponential backoff)
 const RETRY_DELAYS_MS = [
@@ -314,42 +359,76 @@ async function runEnrichmentCycle(config: CronJobConfig): Promise<void> {
 }
 
 /**
- * Start the enrichment cron job
+ * Schedule next run with smart interval (RML-809)
  */
-export function startEnrichmentCron(config: CronJobConfig): Cron | null {
-  if (!config.enabled) {
-    cronLogger.info("Enrichment cron is disabled");
-    return null;
-  }
+function scheduleNextRun(config: CronJobConfig): void {
+  if (isStopped) return;
 
-  if (cronJob) {
-    cronLogger.warn("Cron job already running, stopping previous instance");
-    cronJob.stop();
-  }
+  const { intervalMs, period } = getSmartInterval();
+  const nextRunTime = new Date(Date.now() + intervalMs);
 
   cronLogger.info(
     {
-      interval: config.interval,
-      batchSize: config.batchSize,
-      delayMs: config.delayMs,
+      period,
+      intervalMinutes: intervalMs / 60000,
+      nextRun: nextRunTime.toISOString(),
     },
-    "Starting enrichment cron job",
+    "Scheduling next enrichment run",
   );
 
-  cronJob = new Cron(config.interval, async () => {
+  smartCronTimer = setTimeout(async () => {
     await runEnrichmentCycle(config);
-  });
+    scheduleNextRun(config); // Schedule next run after completion
+  }, intervalMs);
+}
 
-  return cronJob;
+/**
+ * Start the enrichment cron job with smart scheduling (RML-809)
+ */
+export function startEnrichmentCron(config: CronJobConfig): void {
+  if (!config.enabled) {
+    cronLogger.info("Enrichment cron is disabled");
+    return;
+  }
+
+  if (smartCronTimer) {
+    cronLogger.warn("Cron job already running, stopping previous instance");
+    clearTimeout(smartCronTimer);
+  }
+
+  isStopped = false;
+  const { intervalMs, period } = getSmartInterval();
+
+  cronLogger.info(
+    {
+      batchSize: config.batchSize,
+      delayMs: config.delayMs,
+      currentPeriod: period,
+      currentIntervalMinutes: intervalMs / 60000,
+      schedule: {
+        business: "09:00-19:00 → 5min",
+        evening: "19:00-23:30 → 20min",
+        night: "23:30-06:00 → 60min",
+        earlyMorning: "06:00-09:00 → 20min",
+      },
+    },
+    "Starting enrichment cron with smart scheduling",
+  );
+
+  // Run immediately on start, then schedule next
+  runEnrichmentCycle(config).then(() => {
+    scheduleNextRun(config);
+  });
 }
 
 /**
  * Stop the enrichment cron job
  */
 export function stopEnrichmentCron(): void {
-  if (cronJob) {
-    cronJob.stop();
-    cronJob = null;
+  isStopped = true;
+  if (smartCronTimer) {
+    clearTimeout(smartCronTimer);
+    smartCronTimer = null;
     cronLogger.info("Enrichment cron job stopped");
   }
 }
@@ -361,11 +440,18 @@ export function getCronStatus(): {
   running: boolean;
   isProcessing: boolean;
   nextRun: Date | null;
+  currentPeriod: string;
+  currentIntervalMinutes: number;
 } {
+  const { intervalMs, period } = getSmartInterval();
+  const nextRunTime = smartCronTimer ? new Date(Date.now() + intervalMs) : null;
+
   return {
-    running: cronJob !== null && cronJob.isRunning(),
+    running: smartCronTimer !== null && !isStopped,
     isProcessing: isRunning,
-    nextRun: cronJob?.nextRun() ?? null,
+    nextRun: nextRunTime,
+    currentPeriod: period,
+    currentIntervalMinutes: intervalMs / 60000,
   };
 }
 
