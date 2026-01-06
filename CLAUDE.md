@@ -17,7 +17,9 @@ TypeScript C2S Lead Enrichment API - a rewrite of the Rust-based `rust-c2s-api`.
 - **Validation**: Zod (config) + Elysia's typebox (routes)
 - **HTTP Client**: ky
 - **Logging**: pino + pino-pretty
-- **Testing**: Bun test (140 tests)
+- **Testing**: Bun test (179 tests)
+- **Metrics**: Prometheus (prom-client)
+- **Email**: Resend
 
 ## Commands
 
@@ -79,7 +81,9 @@ Container
 │   ├── CpfDiscoveryService - 3-tier fallback orchestrator
 │   ├── EnrichmentService   - Main orchestrator
 │   ├── RetryService        - Exponential backoff retry logic
-│   └── AlertService        - Slack webhook alerts
+│   ├── AlertService        - Slack webhook alerts
+│   ├── EmailService        - Email alerts via Resend
+│   └── PrometheusService   - Metrics collection
 ```
 
 ### Enrichment Flow
@@ -146,10 +150,16 @@ CRON_DELAY_MS=1000      # Delay between enrichments
 RETRY_ENABLED=true      # Enable retry for failed leads
 RETRY_MAX_ATTEMPTS=5    # Max retries before marking as failed
 
-# Alerts
+# Alerts - Slack
 ALERT_WEBHOOK_URL=https://hooks.slack.com/...  # Slack webhook
 ALERT_RATE_LIMIT_MINUTES=5   # Min time between same alert type
 ALERT_ERROR_THRESHOLD=50     # Error rate % to trigger alert
+
+# Alerts - Email (RML-795)
+RESEND_API_KEY=re_xxxxx      # Resend API key
+ALERT_EMAIL_ENABLED=true     # Enable email alerts
+ALERT_EMAIL_FROM=alerts@domain.com  # Sender address
+ALERT_EMAIL_TO=email1@x.com,email2@x.com  # Recipients (comma-separated)
 
 # Redis (optional, falls back to in-memory)
 REDIS_ENABLED=false     # Enable Redis caching
@@ -194,6 +204,7 @@ INCOME_MULTIPLIER=1.9   # Income adjustment factor
 | `/dashboard/retryable` | GET | List leads eligible for retry |
 | `/dashboard/retry` | POST | Trigger manual retry processing |
 | `/dashboard/export` | GET | Export leads (CSV/JSON) |
+| `/metrics` | GET | Prometheus metrics endpoint |
 
 ### Dashboard Export Options
 ```bash
@@ -248,6 +259,12 @@ GET /dashboard/export?status=partial&format=csv
 - **Retry Now** button - Manually trigger retry processing
 - **Export** dropdown - Download leads as CSV or JSON
 
+### Date Filtering (RML-796)
+- **Presets**: Today, Last 7 days, Last 30 days, All time
+- **Custom Range**: Date from/to inputs
+- **URL Persistence**: Filter state saved in URL params
+- Query params: `?preset=7d` or `?dateFrom=2026-01-01&dateTo=2026-01-06`
+
 ## Retry Logic
 
 ### Exponential Backoff Schedule
@@ -274,11 +291,11 @@ GET /dashboard/export?status=partial&format=csv
 ## Alerts
 
 ### Alert Types
-| Type | Severity | Trigger |
-|------|----------|---------|
-| `lead_max_retries` | ⚠️ warning | Lead fails after 5 retries |
-| `high_error_rate` | 🚨 critical | Error rate exceeds 50% |
-| `service_down` | 🚨 critical | External service down for 5+ min |
+| Type | Severity | Trigger | Email |
+|------|----------|---------|-------|
+| `lead_max_retries` | ⚠️ warning | Lead fails after 5 retries | ✅ |
+| `high_error_rate` | 🚨 critical | Error rate exceeds 50% | ✅ |
+| `service_down` | 🚨 critical | External service down for 5+ min | ✅ |
 
 ### Slack Integration
 
@@ -317,6 +334,81 @@ curl -X POST "https://hooks.slack.com/services/xxx/yyy/zzz" \
       {"type": "context", "elements": [{"type": "mrkdwn", "text": "*App:* ts-c2s-api | *Env:* test"}]}
     ]
   }'
+```
+
+### Email Alerts (RML-795)
+
+Email alerts complement Slack for critical notifications. Uses Resend API.
+
+**Configuration:**
+```bash
+fly secrets set RESEND_API_KEY=re_xxxxx
+fly secrets set ALERT_EMAIL_ENABLED=true
+fly secrets set ALERT_EMAIL_FROM=alerts@yourdomain.com
+fly secrets set ALERT_EMAIL_TO=team@company.com,oncall@company.com
+```
+
+**Email Format:**
+- Color-coded header (red=critical, yellow=warning)
+- Alert message with details table
+- Direct link to dashboard
+- Timestamp and environment info
+
+**When Emails Are Sent:**
+- All critical alerts (high_error_rate, service_down)
+- Lead max retries warnings
+
+## Prometheus Metrics (RML-797)
+
+### Endpoint
+```
+GET /metrics
+```
+
+Returns metrics in Prometheus format for scraping.
+
+### Available Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `c2s_enrichment_total` | counter | status | Total enrichments by status |
+| `c2s_enrichment_duration_seconds` | histogram | status | Enrichment duration |
+| `c2s_cpf_discovery_total` | counter | source, result | CPF discovery attempts |
+| `c2s_cpf_discovery_duration_seconds` | histogram | source | CPF discovery duration |
+| `c2s_external_api_calls_total` | counter | service, status | External API calls |
+| `c2s_external_api_duration_seconds` | histogram | service | External API duration |
+| `c2s_retry_total` | counter | result | Retry attempts |
+| `c2s_retry_queue_size` | gauge | - | Leads eligible for retry |
+| `c2s_webhook_total` | counter | source, status | Webhooks received |
+| `c2s_leads_by_status` | gauge | status | Current leads by status |
+| `c2s_http_requests_total` | counter | method, path, status | HTTP requests |
+| `c2s_http_request_duration_seconds` | histogram | method, path | HTTP request duration |
+
+### Default Metrics
+Also includes standard Node.js metrics:
+- `process_cpu_*` - CPU usage
+- `process_resident_memory_bytes` - Memory usage
+- `nodejs_eventloop_lag_seconds` - Event loop lag
+- `nodejs_heap_*` - Heap statistics
+
+### Example Usage
+```bash
+# Get all metrics
+curl https://ts-c2s-api.fly.dev/metrics
+
+# Filter c2s metrics
+curl -s https://ts-c2s-api.fly.dev/metrics | grep "c2s_"
+```
+
+### Grafana Integration
+Configure Prometheus to scrape:
+```yaml
+scrape_configs:
+  - job_name: 'ts-c2s-api'
+    static_configs:
+      - targets: ['ts-c2s-api.fly.dev']
+    scheme: https
+    scrape_interval: 30s
 ```
 
 ## Rate Limiting
@@ -427,8 +519,8 @@ bun test retry          # Run tests matching "retry"
 ```
 
 ### Test Stats
-- **Total tests**: 140
-- **Test files**: 11
+- **Total tests**: 179
+- **Test files**: 13
 - **Passing**: 100%
 
 ## File Structure
@@ -446,7 +538,8 @@ src/
 │   └── enrichment-cron.ts  # Scheduled enrichment
 ├── middleware/
 │   ├── auth.ts             # API key authentication
-│   └── rate-limit.ts       # Rate limiting
+│   ├── rate-limit.ts       # Rate limiting
+│   └── metrics.ts          # Prometheus HTTP instrumentation
 ├── routes/
 │   ├── health.ts
 │   ├── leads.ts
@@ -465,7 +558,9 @@ src/
 │   ├── mimir.service.ts
 │   ├── db-storage.service.ts
 │   ├── retry.service.ts    # Retry logic
-│   ├── alert.service.ts    # Slack alerts
+│   ├── alert.service.ts    # Slack + email alerts
+│   ├── email.service.ts    # Resend email delivery
+│   ├── prometheus.service.ts # Prometheus metrics
 │   ├── metrics.service.ts
 │   └── web-insight.service.ts # Auto-insight generation
 ├── templates/
@@ -486,6 +581,31 @@ src/
 ```
 
 ## Changelog
+
+### January 6, 2026
+
+#### RML-795: Email Alerts
+- Added Resend integration for email alerts
+- Created `email.service.ts` with HTML email templates
+- Emails sent for critical alerts and lead_max_retries
+- Configuration: `RESEND_API_KEY`, `ALERT_EMAIL_*`
+
+#### RML-796: Dashboard Date Filter
+- Added date filtering to dashboard with presets (Today, 7d, 30d, All)
+- Custom date range inputs
+- URL parameter persistence for filter state
+- Updated `db-storage.service.ts` with date filtering
+
+#### RML-797: Prometheus Metrics
+- Added `/metrics` endpoint with prom-client
+- Custom metrics: enrichment, CPF discovery, API calls, retries
+- HTTP request instrumentation via middleware
+- Default Node.js metrics (CPU, memory, event loop)
+
+#### RML-798: Expanded Surname Database
+- Added 150+ rare surnames (Korean, Chinese, Indian, Jewish, etc.)
+- Added 75+ notable families (banking, real estate, tech, media)
+- Improved lead scoring accuracy
 
 ### January 5, 2026
 
@@ -818,10 +938,11 @@ This helps verify:
 - [ ] DBase IP whitelist for `37.16.3.251` - Requested Dec 20, follow up Dec 23
 - [ ] Reportar bug do C2S PATCH API (is_favorite retorna 422)
 
-### Future
-- [ ] Add email alerts (complement Slack)
-- [ ] Dashboard date range filtering
-- [ ] Prometheus metrics endpoint
+### Completed (Jan 6, 2026)
+- [x] RML-795: Email alerts (Resend integration)
+- [x] RML-796: Dashboard date range filtering
+- [x] RML-797: Prometheus metrics endpoint
+- [x] RML-798: Expand surname database
 
 ## Auto-Insights Feature (Dec 24, 2025)
 
