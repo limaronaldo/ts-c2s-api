@@ -46,50 +46,124 @@ export const dashboardRoute = new Elysia({ prefix: "/dashboard" })
 
   /**
    * GET /dashboard/data - JSON data for dashboard
+   * Query params:
+   * - dateFrom: ISO date string (e.g., 2025-01-01)
+   * - dateTo: ISO date string (e.g., 2025-01-31)
+   * - preset: 'today' | '7d' | '30d' | 'all'
    */
-  .get("/data", async () => {
-    try {
-      // Get metrics snapshot
-      const metrics = metricsService.getSnapshot();
+  .get(
+    "/data",
+    async ({ query }) => {
+      try {
+        // Parse date filters
+        let dateFrom: Date | undefined;
+        let dateTo: Date | undefined;
 
-      // Get lead status counts from database
-      const stats = await container.dbStorage.getLeadStats();
+        if (query.preset) {
+          const now = new Date();
+          dateTo = new Date(now);
+          dateTo.setHours(23, 59, 59, 999);
 
-      // Get recent leads
-      const recentLeads = await container.dbStorage.getRecentLeads(20);
+          switch (query.preset) {
+            case "today":
+              dateFrom = new Date(now);
+              dateFrom.setHours(0, 0, 0, 0);
+              break;
+            case "7d":
+              dateFrom = new Date(now);
+              dateFrom.setDate(dateFrom.getDate() - 7);
+              dateFrom.setHours(0, 0, 0, 0);
+              break;
+            case "30d":
+              dateFrom = new Date(now);
+              dateFrom.setDate(dateFrom.getDate() - 30);
+              dateFrom.setHours(0, 0, 0, 0);
+              break;
+            case "all":
+              dateFrom = undefined;
+              dateTo = undefined;
+              break;
+          }
+        } else {
+          if (query.dateFrom) {
+            dateFrom = new Date(query.dateFrom);
+            dateFrom.setHours(0, 0, 0, 0);
+          }
+          if (query.dateTo) {
+            dateTo = new Date(query.dateTo);
+            dateTo.setHours(23, 59, 59, 999);
+          }
+        }
 
-      // Get failed leads
-      const failedLeads = await container.dbStorage.getFailedLeads(10);
+        // Get metrics snapshot (session-based, not filtered by date)
+        const metrics = metricsService.getSnapshot();
 
-      // Get cron status
-      const cronStatus = getCronStatus();
+        // Get lead status counts from database (filtered by date)
+        const stats = await container.dbStorage.getLeadStats(dateFrom, dateTo);
 
-      // Get service health
-      const serviceHealth = alertService.getServiceHealth();
+        // Get recent leads (filtered by date)
+        const recentLeads = await container.dbStorage.getRecentLeads(
+          100,
+          dateFrom,
+          dateTo,
+        );
 
-      // Get error rate stats
-      const errorRate = alertService.getErrorRateStats();
+        // Get failed leads (filtered by date)
+        const failedLeads = await container.dbStorage.getFailedLeads(
+          50,
+          dateFrom,
+          dateTo,
+        );
 
-      return {
-        success: true,
-        data: {
-          metrics,
-          stats,
-          recentLeads,
-          failedLeads,
-          cronStatus,
-          serviceHealth,
-          errorRate,
-          timestamp: new Date().toISOString(),
-        },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  })
+        // Get cron status
+        const cronStatus = getCronStatus();
+
+        // Get service health
+        const serviceHealth = alertService.getServiceHealth();
+
+        // Get error rate stats
+        const errorRate = alertService.getErrorRateStats();
+
+        return {
+          success: true,
+          data: {
+            metrics,
+            stats,
+            recentLeads,
+            failedLeads,
+            cronStatus,
+            serviceHealth,
+            errorRate,
+            timestamp: new Date().toISOString(),
+            dateFilter: {
+              dateFrom: dateFrom?.toISOString() ?? null,
+              dateTo: dateTo?.toISOString() ?? null,
+              preset: query.preset ?? null,
+            },
+          },
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+    {
+      query: t.Object({
+        dateFrom: t.Optional(t.String()),
+        dateTo: t.Optional(t.String()),
+        preset: t.Optional(
+          t.Union([
+            t.Literal("today"),
+            t.Literal("7d"),
+            t.Literal("30d"),
+            t.Literal("all"),
+          ]),
+        ),
+      }),
+    },
+  )
 
   /**
    * GET /dashboard/retryable - List leads eligible for retry

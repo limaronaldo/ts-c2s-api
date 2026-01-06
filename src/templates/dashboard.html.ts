@@ -284,6 +284,52 @@ export function generateDashboardHtml(): string {
       font-size: 0.875rem;
     }
     .filter-bar input { min-width: 200px; }
+    .date-filter {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: var(--card);
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .date-filter label {
+      font-size: 0.875rem;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .date-filter input[type="date"] {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+    .date-preset-btns {
+      display: flex;
+      gap: 4px;
+    }
+    .date-preset-btns button {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      background: white;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .date-preset-btns button:hover {
+      background: #f1f5f9;
+    }
+    .date-preset-btns button.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .date-range-info {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-left: 8px;
+    }
     .toast {
       position: fixed;
       bottom: 20px;
@@ -318,16 +364,30 @@ export function generateDashboardHtml(): string {
     <header>
       <h1>C2S Lead Enrichment</h1>
       <div class="header-actions">
+        <div class="date-filter">
+          <div class="date-preset-btns">
+            <button onclick="setDatePreset('today')" id="preset-today">Today</button>
+            <button onclick="setDatePreset('7d')" id="preset-7d">7 days</button>
+            <button onclick="setDatePreset('30d')" id="preset-30d">30 days</button>
+            <button onclick="setDatePreset('all')" id="preset-all" class="active">All time</button>
+          </div>
+          <span style="color: var(--muted);">|</span>
+          <label>From:</label>
+          <input type="date" id="dateFrom" onchange="applyCustomDateFilter()">
+          <label>To:</label>
+          <input type="date" id="dateTo" onchange="applyCustomDateFilter()">
+          <span class="date-range-info" id="dateRangeInfo"></span>
+        </div>
         <div class="refresh-info">
           <span class="dot"></span>
-          Last updated: <span id="lastUpdate">-</span>
+          <span id="lastUpdate">-</span>
         </div>
         <button class="btn btn-success" id="retryBtn" onclick="triggerRetry()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M1 4v6h6M23 20v-6h-6"/>
             <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
           </svg>
-          Retry Now <span class="retryable-count" id="retryableCount">0</span>
+          Retry <span class="retryable-count" id="retryableCount">0</span>
         </button>
         <div class="dropdown">
           <button class="btn btn-secondary">
@@ -465,6 +525,129 @@ export function generateDashboardHtml(): string {
 
   <script>
     let allLeads = [];
+    let currentDateFilter = { preset: 'all', dateFrom: null, dateTo: null };
+
+    // Initialize date inputs with today's date
+    function initializeDateInputs() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('dateTo').value = today;
+
+      // Set dateFrom to 30 days ago by default
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      document.getElementById('dateFrom').value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+
+    function setDatePreset(preset) {
+      currentDateFilter = { preset, dateFrom: null, dateTo: null };
+
+      // Update button states
+      document.querySelectorAll('.date-preset-btns button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById('preset-' + preset).classList.add('active');
+
+      // Clear custom date inputs visual feedback
+      document.getElementById('dateFrom').style.borderColor = '';
+      document.getElementById('dateTo').style.borderColor = '';
+
+      // Update URL
+      updateUrlParams();
+
+      // Refresh data
+      refresh();
+    }
+
+    function applyCustomDateFilter() {
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+
+      if (dateFrom && dateTo) {
+        currentDateFilter = { preset: null, dateFrom, dateTo };
+
+        // Remove active state from preset buttons
+        document.querySelectorAll('.date-preset-btns button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+
+        // Highlight custom date inputs
+        document.getElementById('dateFrom').style.borderColor = 'var(--primary)';
+        document.getElementById('dateTo').style.borderColor = 'var(--primary)';
+
+        // Update URL
+        updateUrlParams();
+
+        // Refresh data
+        refresh();
+      }
+    }
+
+    function updateUrlParams() {
+      const params = new URLSearchParams(window.location.search);
+
+      if (currentDateFilter.preset) {
+        params.set('preset', currentDateFilter.preset);
+        params.delete('dateFrom');
+        params.delete('dateTo');
+      } else if (currentDateFilter.dateFrom && currentDateFilter.dateTo) {
+        params.set('dateFrom', currentDateFilter.dateFrom);
+        params.set('dateTo', currentDateFilter.dateTo);
+        params.delete('preset');
+      }
+
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    function loadDateFilterFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const preset = params.get('preset');
+      const dateFrom = params.get('dateFrom');
+      const dateTo = params.get('dateTo');
+
+      if (preset) {
+        currentDateFilter = { preset, dateFrom: null, dateTo: null };
+        document.querySelectorAll('.date-preset-btns button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        const presetBtn = document.getElementById('preset-' + preset);
+        if (presetBtn) presetBtn.classList.add('active');
+      } else if (dateFrom && dateTo) {
+        currentDateFilter = { preset: null, dateFrom, dateTo };
+        document.getElementById('dateFrom').value = dateFrom;
+        document.getElementById('dateTo').value = dateTo;
+        document.getElementById('dateFrom').style.borderColor = 'var(--primary)';
+        document.getElementById('dateTo').style.borderColor = 'var(--primary)';
+        document.querySelectorAll('.date-preset-btns button').forEach(btn => {
+          btn.classList.remove('active');
+        });
+      }
+    }
+
+    function getDateFilterParams() {
+      if (currentDateFilter.preset && currentDateFilter.preset !== 'all') {
+        return 'preset=' + currentDateFilter.preset;
+      } else if (currentDateFilter.dateFrom && currentDateFilter.dateTo) {
+        return 'dateFrom=' + currentDateFilter.dateFrom + '&dateTo=' + currentDateFilter.dateTo;
+      }
+      return '';
+    }
+
+    function updateDateRangeInfo(dateFilter) {
+      const info = document.getElementById('dateRangeInfo');
+      if (!dateFilter || (!dateFilter.dateFrom && !dateFilter.preset)) {
+        info.textContent = '';
+        return;
+      }
+
+      if (dateFilter.preset === 'all' || !dateFilter.dateFrom) {
+        info.textContent = '';
+      } else if (dateFilter.dateFrom && dateFilter.dateTo) {
+        const from = new Date(dateFilter.dateFrom).toLocaleDateString('pt-BR');
+        const to = new Date(dateFilter.dateTo).toLocaleDateString('pt-BR');
+        info.textContent = from + ' - ' + to;
+      }
+    }
 
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
@@ -606,7 +789,9 @@ export function generateDashboardHtml(): string {
 
     async function fetchData() {
       try {
-        const res = await fetch('/dashboard/data');
+        const params = getDateFilterParams();
+        const url = '/dashboard/data' + (params ? '?' + params : '');
+        const res = await fetch(url);
         return await res.json();
       } catch (e) {
         console.error('Failed to fetch data:', e);
@@ -627,7 +812,10 @@ export function generateDashboardHtml(): string {
     async function updateDashboard(data) {
       if (!data || !data.success) return;
 
-      const { metrics, stats, recentLeads, failedLeads, cronStatus, serviceHealth, errorRate } = data.data;
+      const { metrics, stats, recentLeads, failedLeads, cronStatus, serviceHealth, errorRate, dateFilter } = data.data;
+
+      // Update date range info
+      updateDateRangeInfo(dateFilter);
 
       // Update timestamp
       document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('pt-BR');
@@ -702,6 +890,8 @@ export function generateDashboardHtml(): string {
     }
 
     // Initial load
+    initializeDateInputs();
+    loadDateFilterFromUrl();
     refresh();
 
     // Auto-refresh every 30 seconds

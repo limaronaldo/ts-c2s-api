@@ -313,15 +313,29 @@ export class DbStorageService {
 
   /**
    * Get lead status counts for dashboard
+   * @param dateFrom - Optional start date filter
+   * @param dateTo - Optional end date filter
    */
-  async getLeadStats(): Promise<Record<string, number>> {
-    const results = await this.db
+  async getLeadStats(dateFrom?: Date, dateTo?: Date): Promise<Record<string, number>> {
+    const conditions = [];
+
+    if (dateFrom) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+    }
+    if (dateTo) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+    }
+
+    const query = this.db
       .select({
         status: schema.googleAdsLeads.enrichmentStatus,
         count: sql<number>`count(*)::int`,
       })
-      .from(schema.googleAdsLeads)
-      .groupBy(schema.googleAdsLeads.enrichmentStatus);
+      .from(schema.googleAdsLeads);
+
+    const results = conditions.length > 0
+      ? await query.where(and(...conditions)).groupBy(schema.googleAdsLeads.enrichmentStatus)
+      : await query.groupBy(schema.googleAdsLeads.enrichmentStatus);
 
     const stats: Record<string, number> = {};
     for (const row of results) {
@@ -332,27 +346,64 @@ export class DbStorageService {
 
   /**
    * Get recent leads for dashboard
+   * @param limit - Max number of leads to return
+   * @param dateFrom - Optional start date filter
+   * @param dateTo - Optional end date filter
    */
   async getRecentLeads(
     limit: number = 20,
+    dateFrom?: Date,
+    dateTo?: Date,
   ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
-    return this.db
+    const conditions = [];
+
+    if (dateFrom) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+    }
+    if (dateTo) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+    }
+
+    const query = this.db
       .select()
-      .from(schema.googleAdsLeads)
+      .from(schema.googleAdsLeads);
+
+    if (conditions.length > 0) {
+      return query
+        .where(and(...conditions))
+        .orderBy(desc(schema.googleAdsLeads.createdAt))
+        .limit(limit);
+    }
+
+    return query
       .orderBy(desc(schema.googleAdsLeads.createdAt))
       .limit(limit);
   }
 
   /**
    * Get leads that failed after max retries
+   * @param limit - Max number of leads to return
+   * @param dateFrom - Optional start date filter
+   * @param dateTo - Optional end date filter
    */
   async getFailedLeads(
     limit: number = 50,
+    dateFrom?: Date,
+    dateTo?: Date,
   ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    const conditions = [eq(schema.googleAdsLeads.enrichmentStatus, "failed")];
+
+    if (dateFrom) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+    }
+    if (dateTo) {
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+    }
+
     return this.db
       .select()
       .from(schema.googleAdsLeads)
-      .where(eq(schema.googleAdsLeads.enrichmentStatus, "failed"))
+      .where(and(...conditions))
       .orderBy(desc(schema.googleAdsLeads.lastRetryAt))
       .limit(limit);
   }
