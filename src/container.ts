@@ -8,6 +8,7 @@ import { EnrichmentService } from "./services/enrichment.service";
 import { DbStorageService } from "./services/db-storage.service";
 import { IbviPropertyService } from "./services/ibvi-property.service";
 import { WebInsightService } from "./services/web-insight.service";
+import { PrometheusService } from "./services/prometheus.service";
 
 /**
  * Simple dependency injection container
@@ -24,6 +25,7 @@ class ServiceContainer {
   private _dbStorage?: DbStorageService;
   private _ibviProperty?: IbviPropertyService;
   private _webInsight?: WebInsightService;
+  private _prometheus?: PrometheusService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -95,6 +97,13 @@ class ServiceContainer {
     return this._webInsight;
   }
 
+  get prometheus(): PrometheusService {
+    if (!this._prometheus) {
+      this._prometheus = new PrometheusService();
+    }
+    return this._prometheus;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -107,6 +116,7 @@ class ServiceContainer {
     this._dbStorage = undefined;
     this._ibviProperty = undefined;
     this._webInsight = undefined;
+    this._prometheus = undefined;
   }
 }
 

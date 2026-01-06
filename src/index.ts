@@ -11,6 +11,7 @@ import { initializeCaches } from "./utils/cache";
 import { closeRedis } from "./utils/redis-cache";
 import { rateLimit } from "./middleware/rate-limit";
 import { apiKeyAuth, getApiKeysFromEnv } from "./middleware/auth";
+import { metricsMiddleware } from "./middleware/metrics";
 
 const app = new Elysia().use(errorHandler).use(healthRoute);
 
@@ -21,6 +22,9 @@ if (hasFullConfig()) {
 
   // Initialize caches (Redis if configured, otherwise in-memory)
   initializeCaches();
+
+  // Add metrics middleware for HTTP request instrumentation
+  app.use(metricsMiddleware);
 
   // Apply rate limiting if enabled
   const config = getConfig();

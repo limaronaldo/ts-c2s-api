@@ -14,6 +14,7 @@ import {
   type PropertySummary,
 } from "./ibvi-property.service";
 import { WebInsightService, type LeadInsightData } from "./web-insight.service";
+import { PrometheusService } from "./prometheus.service";
 import { recentCpfCache, processingLeadsCache } from "../utils/cache";
 import {
   normalizeIncome,
@@ -30,6 +31,7 @@ import {
 import { enrichmentLogger } from "../utils/logger";
 import { getConfig } from "../config";
 import type { NewParty, NewPartyContact, NewAddress } from "../db/schema";
+import { container } from "../container";
 
 export interface LeadData {
   leadId: string;
@@ -85,6 +87,7 @@ export class EnrichmentService {
 
   async enrichLead(lead: LeadData): Promise<EnrichmentResult> {
     const { leadId, name, phone, email, campaignName } = lead;
+    const startTime = Date.now();
 
     enrichmentLogger.info(
       { leadId, name, phone, email },
@@ -120,7 +123,10 @@ export class EnrichmentService {
           { leadId },
           "Could not discover CPF, creating unenriched customer",
         );
-        return this.createUnenrichedCustomer(lead);
+        const result = await this.createUnenrichedCustomer(lead);
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        container.prometheus.recordEnrichment("unenriched", durationSeconds);
+        return result;
       }
 
       const { cpf, foundName, nameMatches } = cpfResult;
@@ -163,12 +169,15 @@ export class EnrichmentService {
           { leadId, cpf },
           "Work API timed out, creating partial enrichment customer",
         );
-        return this.createPartialEnrichmentCustomer(
+        const result = await this.createPartialEnrichmentCustomer(
           lead,
           cpf,
           propertyData,
           nameMismatchWarning,
         );
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        container.prometheus.recordEnrichment("partial", durationSeconds);
+        return result;
       }
 
       if (!workApiResult.data) {
@@ -213,6 +222,10 @@ export class EnrichmentService {
         "Lead enrichment completed",
       );
 
+      // Record metrics
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      container.prometheus.recordEnrichment("completed", durationSeconds);
+
       // Generate and send insights (async, doesn't block response)
       if (this.enableWebInsights) {
         this.generateInsightsAsync(
@@ -236,6 +249,11 @@ export class EnrichmentService {
       };
     } catch (error) {
       enrichmentLogger.error({ leadId, error }, "Lead enrichment failed");
+
+      // Record failure metrics
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      container.prometheus.recordEnrichment("error", durationSeconds);
+
       return {
         success: false,
         enriched: false,
