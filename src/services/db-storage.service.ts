@@ -320,10 +320,10 @@ export class DbStorageService {
     const conditions = [];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
     }
 
     const query = this.db
@@ -358,10 +358,10 @@ export class DbStorageService {
     const conditions = [];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
     }
 
     const query = this.db
@@ -394,10 +394,10 @@ export class DbStorageService {
     const conditions = [eq(schema.googleAdsLeads.enrichmentStatus, "failed")];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo}`);
+      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
     }
 
     return this.db
