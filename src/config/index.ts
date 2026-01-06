@@ -69,6 +69,15 @@ const configSchema = z.object({
   ALERT_ERROR_WINDOW_MINUTES: z.coerce.number().default(10),
   ALERT_SERVICE_DOWN_MINUTES: z.coerce.number().default(5),
 
+  // Email alert settings (RML-795)
+  RESEND_API_KEY: z.string().optional(),
+  ALERT_EMAIL_ENABLED: z
+    .string()
+    .default("false")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
+  ALERT_EMAIL_FROM: z.string().email().default("alerts@ts-c2s-api.fly.dev"),
+  ALERT_EMAIL_TO: z.string().optional(), // Comma-separated list of emails
+
   // Redis settings (optional - falls back to in-memory cache)
   REDIS_URL: z.string().url().optional(),
   REDIS_ENABLED: z

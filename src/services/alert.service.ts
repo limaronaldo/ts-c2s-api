@@ -1,15 +1,17 @@
 /**
- * Alert Service (RML-639)
+ * Alert Service (RML-639, RML-795)
  *
- * Sends webhook alerts for enrichment failures and service issues.
+ * Sends webhook and email alerts for enrichment failures and service issues.
  * - Rate limiting: max 1 alert per type per 5 minutes
  * - Alert types: lead_max_retries, high_error_rate, service_down
  * - Tracks error rate with sliding window
  * - Tracks service health status
+ * - Supports both Slack webhooks and email (Resend)
  */
 
 import { getConfig } from "../config";
 import { logger } from "../utils/logger";
+import { emailService } from "./email.service";
 
 const alertLogger = logger.child({ module: "alerts" });
 
@@ -152,11 +154,34 @@ export class AlertService {
       }
 
       this.lastAlertTimes.set(type, Date.now());
-      alertLogger.info({ type, details }, "Alert sent successfully");
+      alertLogger.info({ type, details }, "Slack alert sent successfully");
+
+      // Also send email alert for critical alerts (RML-795)
+      if (severity === "critical" || type === "lead_max_retries") {
+        this.sendEmailAlert(type, severity, message, details);
+      }
+
       return true;
     } catch (error) {
       alertLogger.error({ type, error }, "Failed to send alert");
       return false;
+    }
+  }
+
+  /**
+   * Send email alert (RML-795)
+   * Called automatically for critical alerts
+   */
+  private async sendEmailAlert(
+    type: AlertType,
+    severity: AlertSeverity,
+    message: string,
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await emailService.sendAlert({ type, severity, message, details });
+    } catch (error) {
+      alertLogger.error({ type, error }, "Failed to send email alert");
     }
   }
 
