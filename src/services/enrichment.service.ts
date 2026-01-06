@@ -32,6 +32,8 @@ import { enrichmentLogger } from "../utils/logger";
 import { getConfig } from "../config";
 import type { NewParty, NewPartyContact, NewAddress } from "../db/schema";
 import { container } from "../container";
+import { detectHighValueLead } from "../utils/high-value-detector";
+import { alertService } from "./alert.service";
 
 export interface LeadData {
   leadId: string;
@@ -238,6 +240,16 @@ export class EnrichmentService {
           campaignName,
         );
       }
+
+      // Check for high-value lead and alert (RML-810)
+      this.checkHighValueLeadAsync(
+        leadId,
+        name,
+        personData,
+        phone,
+        email,
+        c2sResult.data.id,
+      );
 
       return {
         success: true,
@@ -686,6 +698,74 @@ export class EnrichmentService {
         enrichmentLogger.error(
           { leadId, error },
           "Failed to generate insights (non-blocking)",
+        );
+      }
+    })();
+  }
+
+  /**
+   * Check if lead is high-value and send alert (RML-810)
+   * Runs asynchronously - doesn't block enrichment response
+   */
+  private checkHighValueLeadAsync(
+    leadId: string,
+    leadName: string,
+    personData: WorkApiPerson,
+    phone?: string,
+    email?: string,
+    c2sCustomerId?: string,
+  ): void {
+    // Run async without blocking
+    (async () => {
+      try {
+        // Build criteria from person data
+        const addresses = personData.enderecos?.map((addr) => ({
+          neighborhood: addr.bairro,
+          city: addr.cidade,
+          state: addr.uf,
+        }));
+
+        const result = detectHighValueLead({
+          income: normalizeIncome(personData.renda, this.incomeMultiplier) ?? undefined,
+          presumedIncome: personData.rendaPresumida
+            ? normalizeIncome(personData.rendaPresumida, this.incomeMultiplier) ?? undefined
+            : undefined,
+          addresses,
+          leadName,
+          enrichedName: personData.nome,
+          // companyCount would come from CNPJ lookup - future enhancement
+        });
+
+        if (result.isHighValue) {
+          enrichmentLogger.info(
+            { leadId, reasons: result.reasons, details: result.details },
+            "High-value lead detected!",
+          );
+
+          // Build C2S URL for quick access
+          const config = getConfig();
+          const c2sUrl = c2sCustomerId
+            ? `${config.C2S_URL}/leads/${c2sCustomerId}`
+            : undefined;
+
+          // Send alert via Slack + Email
+          await alertService.alertHighValueLead({
+            leadId,
+            name: personData.nome || leadName,
+            phone: phone ? formatPhoneWithCountryCode(phone) : undefined,
+            email,
+            income: result.details.income,
+            neighborhood: result.details.neighborhood,
+            companies: result.details.companies,
+            familyName: result.details.familyName,
+            reasons: result.reasons,
+            c2sUrl,
+          });
+        }
+      } catch (error) {
+        enrichmentLogger.error(
+          { leadId, error },
+          "Failed to check high-value lead (non-blocking)",
         );
       }
     })();

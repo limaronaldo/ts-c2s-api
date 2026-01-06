@@ -15,7 +15,7 @@ import { emailService } from "./email.service";
 
 const alertLogger = logger.child({ module: "alerts" });
 
-export type AlertType = "lead_max_retries" | "high_error_rate" | "service_down";
+export type AlertType = "lead_max_retries" | "high_error_rate" | "service_down" | "high_value_lead";
 
 export type AlertSeverity = "warning" | "critical";
 
@@ -252,6 +252,24 @@ export class AlertService {
   }
 
   /**
+   * Send alert for high-value lead (RML-810)
+   */
+  async alertHighValueLead(details: {
+    leadId: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    income?: number;
+    neighborhood?: string;
+    companies?: number;
+    familyName?: string;
+    reasons: string[];
+    c2sUrl?: string;
+  }): Promise<void> {
+    await this.sendAlert("high_value_lead", details);
+  }
+
+  /**
    * Check if error rate exceeds threshold
    */
   private checkErrorRate(): void {
@@ -282,6 +300,8 @@ export class AlertService {
         return "critical";
       case "high_error_rate":
         return "critical";
+      case "high_value_lead":
+        return "critical"; // High priority - notify immediately
       case "lead_max_retries":
         return "warning";
       default:
@@ -300,9 +320,53 @@ export class AlertService {
         return `High error rate: ${details.errorRate}% failures in last ${details.windowMinutes} minutes (${details.failures}/${details.totalAttempts})`;
       case "service_down":
         return `Service ${details.service} has been down for ${details.downSinceMinutes} minutes`;
+      case "high_value_lead":
+        return this.formatHighValueLeadMessage(details);
       default:
         return `Alert: ${type}`;
     }
+  }
+
+  /**
+   * Format high-value lead message (RML-810)
+   */
+  private formatHighValueLeadMessage(details: Record<string, unknown>): string {
+    const lines: string[] = [];
+
+    lines.push(`*Nome:* ${details.name}`);
+
+    if (details.income) {
+      const incomeFormatted = new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(details.income as number);
+      lines.push(`*Renda:* ${incomeFormatted}/mês`);
+    }
+
+    if (details.neighborhood) {
+      lines.push(`*Bairro:* ${details.neighborhood}`);
+    }
+
+    if (details.companies && (details.companies as number) > 0) {
+      lines.push(`*Empresas:* ${details.companies} ativas`);
+    }
+
+    if (details.familyName) {
+      lines.push(`*Família:* ${details.familyName}`);
+    }
+
+    if (details.phone) {
+      lines.push(`*Telefone:* ${details.phone}`);
+    }
+
+    if (details.reasons && Array.isArray(details.reasons)) {
+      lines.push(`\n*Por que é premium:*`);
+      for (const reason of details.reasons as string[]) {
+        lines.push(`• ${reason}`);
+      }
+    }
+
+    return lines.join("\n");
   }
 
   /**
