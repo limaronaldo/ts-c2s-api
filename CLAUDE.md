@@ -575,7 +575,9 @@ src/
 │   ├── name-matcher.ts
 │   ├── description-builder.ts
 │   ├── surname-analyzer.ts # Surname analysis for insights
-│   └── insight-formatter.ts # Insight message formatting
+│   ├── insight-formatter.ts # Insight message formatting
+│   ├── neighborhoods.ts    # Noble neighborhoods SP/RJ (RML-810)
+│   └── high-value-detector.ts # Premium lead detection (RML-810)
 ├── container.ts            # DI container
 └── index.ts                # Entry point
 ```
@@ -583,6 +585,21 @@ src/
 ## Changelog
 
 ### January 6, 2026
+
+#### RML-809: Smart Cron Schedule
+- Replaced fixed 15-minute cron with dynamic intervals
+- Business hours (09-19h SP): 5 min intervals
+- Evening (19-23:30h): 20 min intervals
+- Night (23:30-06h): 60 min intervals
+- Early morning (06-09h): 20 min intervals
+- Dashboard shows current period and interval
+
+#### RML-810: High-Value Lead Alerts
+- Added `neighborhoods.ts` with 90+ noble neighborhoods (SP/RJ)
+- Added `high-value-detector.ts` with multi-criteria detection
+- New alert type `high_value_lead` with Slack + Email
+- Criteria: income >= R$10k, noble neighborhood, multiple companies, notable family
+- Async execution after successful enrichment
 
 #### RML-795: Email Alerts
 - Added Resend integration for email alerts
@@ -932,17 +949,236 @@ This helps verify:
 - Insight message was generated and sent
 - Name mismatch warnings are being added
 
+## Smart Cron Schedule (RML-809)
+
+### Overview
+
+O cron de enrichment agora usa intervalos dinâmicos baseados no horário de São Paulo, otimizando o processamento durante horário comercial.
+
+### Schedule
+
+| Período | Horário (SP) | Intervalo | Justificativa |
+|---------|--------------|-----------|---------------|
+| **Business Hours** | 09:00 - 19:00 | 5 min | Leads frescos, vendedores ativos |
+| **Evening** | 19:00 - 23:30 | 20 min | Menos urgente, ainda processando |
+| **Night** | 23:30 - 06:00 | 60 min | Mínimo necessário |
+| **Early Morning** | 06:00 - 09:00 | 20 min | Preparando para horário comercial |
+
+### Implementation
+
+```typescript
+// src/jobs/enrichment-cron.ts
+function getSmartInterval(): { intervalMs: number; period: string } {
+  const now = new Date();
+  const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const hours = spTime.getHours();
+  const minutes = spTime.getMinutes();
+  const timeInMinutes = hours * 60 + minutes;
+
+  // 09:00-19:00: 5 min (business hours)
+  if (timeInMinutes >= 540 && timeInMinutes < 1140) {
+    return { intervalMs: 5 * 60 * 1000, period: "business" };
+  }
+  // 19:00-23:30: 20 min (evening)
+  if (timeInMinutes >= 1140 && timeInMinutes < 1410) {
+    return { intervalMs: 20 * 60 * 1000, period: "evening" };
+  }
+  // 23:30-06:00: 60 min (night)
+  if (timeInMinutes >= 1410 || timeInMinutes < 360) {
+    return { intervalMs: 60 * 60 * 1000, period: "night" };
+  }
+  // 06:00-09:00: 20 min (early morning)
+  return { intervalMs: 20 * 60 * 1000, period: "early_morning" };
+}
+```
+
+### Dashboard Status
+
+O dashboard mostra o período atual e intervalo:
+
+```json
+{
+  "cron": {
+    "enabled": true,
+    "running": true,
+    "currentPeriod": "business",
+    "currentIntervalMinutes": 5,
+    "lastRun": "2026-01-06T15:30:00Z",
+    "nextRun": "2026-01-06T15:35:00Z"
+  }
+}
+```
+
+### Verificação
+
+```bash
+# Ver status do cron no dashboard
+curl -s https://ts-c2s-api.fly.dev/dashboard/data | jq '.cron'
+
+# Ver logs do cron
+fly logs | grep "Smart cron"
+```
+
+## High-Value Lead Alerts (RML-810)
+
+### Overview
+
+Detecção automática de leads premium com alertas via Slack + Email. Quando um lead é enriquecido com sucesso, o sistema analisa múltiplos critérios para identificar clientes de alto valor.
+
+### Criteria
+
+| Critério | Threshold | Exemplo |
+|----------|-----------|---------|
+| **Alta Renda** | >= R$10.000/mês | Renda ou renda presumida |
+| **Bairro Nobre** | Lista SP/RJ | Jardins, Itaim, Leblon, Ipanema |
+| **Múltiplas Empresas** | >= 2 ativas | Sócio de 3 empresas |
+| **Família Notável** | Lista conhecida | Safra, Rudge, Lemann |
+| **Sobrenome Raro** | Confiança >= 70% | Passafaro, Falabella |
+
+### Noble Neighborhoods
+
+**São Paulo (50+ bairros):**
+```
+jardim europa, jardim america, jardim paulistano, jardim paulista,
+itaim bibi, vila nova conceicao, moema, vila olimpia, pinheiros,
+higienopolis, morumbi, brooklin, campo belo, paraiso, vila mariana,
+perdizes, pacaembu, sumare, pompeia, lapa, vila madalena, butanta,
+real parque, cidade jardim, granja julieta, chacara flora,
+chacara santo antonio, santo amaro, jardim marajoara, interlagos,
+alphaville, tambore, aldeia da serra, granja viana
+```
+
+**Rio de Janeiro (40+ bairros):**
+```
+leblon, ipanema, lagoa, gavea, jardim botanico, humaita, botafogo,
+flamengo, laranjeiras, cosme velho, santa teresa, urca, leme,
+copacabana, arpoador, sao conrado, barra da tijuca, recreio,
+joatinga, itanhanga, alto da boa vista, tijuca, vila isabel,
+graca, gloria, catete, centro
+```
+
+### Alert Format (Slack)
+
+```
+🔥 HIGH VALUE LEAD
+
+*Nome:* João da Silva
+*Renda:* R$ 15.000,00/mês
+*Bairro:* Jardim Europa
+*Empresas:* 3 ativas
+*Telefone:* +55 11 99999-8888
+
+*Por que é premium:*
+• Renda alta: R$ 15.000,00/mês
+• Bairro nobre: Jardim Europa
+• 3 empresas ativas
+
+App: ts-c2s-api | Env: production | Time: 2026-01-06T15:30:00Z
+```
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `src/utils/neighborhoods.ts` | Base de dados de bairros nobres SP/RJ |
+| `src/utils/high-value-detector.ts` | Lógica de detecção com `detectHighValueLead()` |
+| `src/services/alert.service.ts` | Alert type `high_value_lead` e formatação |
+| `src/services/enrichment.service.ts` | Integração via `checkHighValueLeadAsync()` |
+
+### Code Flow
+
+```typescript
+// enrichment.service.ts - após enrichment bem-sucedido
+this.checkHighValueLeadAsync(
+  leadId,
+  name,
+  personData,
+  phone,
+  email,
+  c2sResult.data.id,
+);
+
+// Executa async, não bloqueia retorno
+private checkHighValueLeadAsync(...) {
+  (async () => {
+    const result = detectHighValueLead({
+      income: personData.renda,
+      addresses: personData.enderecos,
+      enrichedName: personData.nome,
+    });
+
+    if (result.isHighValue) {
+      await alertService.alertHighValueLead({
+        leadId,
+        name: personData.nome,
+        income: result.details.income,
+        neighborhood: result.details.neighborhood,
+        reasons: result.reasons,
+      });
+    }
+  })();
+}
+```
+
+### Testing Detection
+
+```typescript
+import { detectHighValueLead } from "./utils/high-value-detector";
+
+const result = detectHighValueLead({
+  income: 15000,
+  addresses: [{ neighborhood: "Jardim Europa", city: "São Paulo", state: "SP" }],
+  enrichedName: "João Safra",
+});
+
+// result:
+// {
+//   isHighValue: true,
+//   reasons: [
+//     "Renda alta: R$ 15.000,00/mês",
+//     "Bairro nobre: Jardim Europa",
+//     "Família notável: Família bancária, uma das mais ricas do Brasil"
+//   ],
+//   details: {
+//     income: 15000,
+//     neighborhood: "Jardim Europa",
+//     familyName: "safra",
+//     familyContext: "Família bancária, uma das mais ricas do Brasil"
+//   }
+// }
+```
+
+### Logs
+
+```bash
+# Ver detecções de high-value
+fly logs | grep "High-value lead detected"
+
+# Exemplo de log
+{
+  "level": 30,
+  "module": "enrichment",
+  "leadId": "abc123",
+  "reasons": ["Renda alta: R$ 15.000,00/mês", "Bairro nobre: Jardim Europa"],
+  "details": { "income": 15000, "neighborhood": "Jardim Europa" },
+  "msg": "High-value lead detected!"
+}
+```
+
 ## TODO
 
 ### Pending
 - [ ] DBase IP whitelist for `37.16.3.251` - Requested Dec 20, follow up Dec 23
 - [ ] Reportar bug do C2S PATCH API (is_favorite retorna 422)
+- [ ] RML-811: Dashboard authentication (simple password)
 
 ### Completed (Jan 6, 2026)
 - [x] RML-795: Email alerts (Resend integration)
 - [x] RML-796: Dashboard date range filtering
 - [x] RML-797: Prometheus metrics endpoint
 - [x] RML-798: Expand surname database
+- [x] RML-809: Smart cron schedule (dynamic intervals)
+- [x] RML-810: High-value lead alerts
 
 ## Auto-Insights Feature (Dec 24, 2025)
 
