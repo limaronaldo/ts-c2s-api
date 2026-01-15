@@ -18,7 +18,7 @@ export interface SurnameAnalysis {
 }
 
 export interface FamilyConnection {
-  type: 'spouse' | 'sibling' | 'parent_child' | 'relative' | 'none';
+  type: "spouse" | "sibling" | "parent_child" | "relative" | "none";
   sharedSurname?: string;
   confidence: number;
   explanation: string;
@@ -34,160 +34,160 @@ export interface ConcatenatedName {
 // Sobrenomes raros no Brasil (encontrados na análise de leads)
 const RARE_SURNAMES = new Set([
   // Italianos raros
-  'passafaro',
-  'falabella',
-  'trussardi',
-  'berlusconi',
-  'ferragamo',
-  'armani',
-  'versace',
-  'bulgari',
-  'benetton',
-  'agnelli',
-  'beretta',
-  'lavazza',
-  'barilla',
-  'fendi',
-  'gucci',
-  'prada',
-  'zegna',
+  "passafaro",
+  "falabella",
+  "trussardi",
+  "berlusconi",
+  "ferragamo",
+  "armani",
+  "versace",
+  "bulgari",
+  "benetton",
+  "agnelli",
+  "beretta",
+  "lavazza",
+  "barilla",
+  "fendi",
+  "gucci",
+  "prada",
+  "zegna",
 
   // Alemães raros
-  'rosenbauer',
-  'schwarzenegger',
-  'steinhoff',
-  'rothschild',
-  'krupp',
-  'siemens',
-  'bosch',
-  'porsche',
-  'quandt',
-  'würth',
-  'henkel',
-  'merck',
+  "rosenbauer",
+  "schwarzenegger",
+  "steinhoff",
+  "rothschild",
+  "krupp",
+  "siemens",
+  "bosch",
+  "porsche",
+  "quandt",
+  "würth",
+  "henkel",
+  "merck",
 
   // Árabes/Libaneses raros
-  'azar',
-  'khoury',
-  'haddad',
-  'mansour',
-  'sabbagh',
-  'jafet',
-  'maluf',
-  'kassab',
-  'temer',
-  'skaf',
-  'gebara',
-  'mattar',
-  'zeitune',
-  'bittar',
+  "azar",
+  "khoury",
+  "haddad",
+  "mansour",
+  "sabbagh",
+  "jafet",
+  "maluf",
+  "kassab",
+  "temer",
+  "skaf",
+  "gebara",
+  "mattar",
+  "zeitune",
+  "bittar",
 
   // Portugueses raros
-  'figueiredo',
-  'mascarenhas',
-  'vasconcellos',
-  'bragança',
-  'orleans',
+  "figueiredo",
+  "mascarenhas",
+  "vasconcellos",
+  "bragança",
+  "orleans",
 
   // Holandeses/Africanos
-  'roos',
-  'botha',
-  'van der berg',
-  'de klerk',
-  'mandela',
+  "roos",
+  "botha",
+  "van der berg",
+  "de klerk",
+  "mandela",
 
   // Japoneses raros
-  'tidi',
-  'yamazaki',
-  'nakashima',
-  'watanabe',
-  'takahashi',
-  'tanaka',
-  'yamamoto',
-  'kobayashi',
-  'matsumoto',
-  'fujimori',
+  "tidi",
+  "yamazaki",
+  "nakashima",
+  "watanabe",
+  "takahashi",
+  "tanaka",
+  "yamamoto",
+  "kobayashi",
+  "matsumoto",
+  "fujimori",
 
   // Coreanos
-  'kim',
-  'park',
-  'lee',
-  'choi',
-  'jung',
-  'kang',
-  'yoon',
-  'jang',
-  'han',
-  'shin',
-  'kwon',
-  'hwang',
+  "kim",
+  "park",
+  "lee",
+  "choi",
+  "jung",
+  "kang",
+  "yoon",
+  "jang",
+  "han",
+  "shin",
+  "kwon",
+  "hwang",
 
   // Chineses
-  'wang',
-  'zhang',
-  'chen',
-  'liu',
-  'huang',
-  'zhou',
-  'wu',
-  'xu',
-  'sun',
-  'ma',
-  'zhu',
-  'lin',
-  'chang',
-  'wong',
-  'lam',
-  'chan',
-  'tang',
-  'fong',
+  "wang",
+  "zhang",
+  "chen",
+  "liu",
+  "huang",
+  "zhou",
+  "wu",
+  "xu",
+  "sun",
+  "ma",
+  "zhu",
+  "lin",
+  "chang",
+  "wong",
+  "lam",
+  "chan",
+  "tang",
+  "fong",
 
   // Indianos
-  'patel',
-  'sharma',
-  'singh',
-  'kumar',
-  'gupta',
-  'modi',
-  'gandhi',
-  'ambani',
-  'tata',
-  'birla',
-  'mittal',
-  'bajaj',
-  'mahindra',
-  'godrej',
+  "patel",
+  "sharma",
+  "singh",
+  "kumar",
+  "gupta",
+  "modi",
+  "gandhi",
+  "ambani",
+  "tata",
+  "birla",
+  "mittal",
+  "bajaj",
+  "mahindra",
+  "godrej",
 
   // Judeus/Israelenses
-  'cohen',
-  'levy',
-  'levi',
-  'goldberg',
-  'rosenberg',
-  'steinberg',
-  'weinberg',
-  'blumenfeld',
-  'friedman',
-  'klabin',
-  'lafer',
-  'mindlin',
-  'horn',
-  'feffer',
+  "cohen",
+  "levy",
+  "levi",
+  "goldberg",
+  "rosenberg",
+  "steinberg",
+  "weinberg",
+  "blumenfeld",
+  "friedman",
+  "klabin",
+  "lafer",
+  "mindlin",
+  "horn",
+  "feffer",
 
   // Espanhóis raros
-  'botín',
-  'ortega',
-  'florentino',
+  "botín",
+  "ortega",
+  "florentino",
 
   // Outros raros
-  'rabello',
-  'botelho',
-  'leal',
-  'penteado',
-  'alvim',
-  'arruda',
-  'peixoto',
-  'buarque',
+  "rabello",
+  "botelho",
+  "leal",
+  "penteado",
+  "alvim",
+  "arruda",
+  "peixoto",
+  "buarque",
 ]);
 
 // Famílias notáveis do Brasil com contexto
@@ -197,404 +197,412 @@ const NOTABLE_FAMILIES: Record<
 > = {
   // ========== BANCÁRIO/FINANCEIRO ==========
   rudge: {
-    context: 'Família bancária tradicional de São Paulo',
-    relatedPeople: ['José Rudge (ex-VP Itaú)', 'Lala Rudge (influenciadora/herdeira)'],
-    sector: 'Bancário/Financeiro',
+    context: "Família bancária tradicional de São Paulo",
+    relatedPeople: [
+      "José Rudge (ex-VP Itaú)",
+      "Lala Rudge (influenciadora/herdeira)",
+    ],
+    sector: "Bancário/Financeiro",
   },
   safra: {
-    context: 'Família bancária, uma das mais ricas do Brasil',
-    relatedPeople: ['Joseph Safra', 'Banco Safra'],
-    sector: 'Bancário',
+    context: "Família bancária, uma das mais ricas do Brasil",
+    relatedPeople: ["Joseph Safra", "Banco Safra"],
+    sector: "Bancário",
   },
   setúbal: {
-    context: 'Família bancária, fundadores do Itaú',
-    relatedPeople: ['Olavo Setúbal', 'Roberto Setúbal'],
-    sector: 'Bancário',
+    context: "Família bancária, fundadores do Itaú",
+    relatedPeople: ["Olavo Setúbal", "Roberto Setúbal"],
+    sector: "Bancário",
   },
   setubal: {
-    context: 'Família bancária, fundadores do Itaú',
-    relatedPeople: ['Olavo Setúbal', 'Roberto Setúbal'],
-    sector: 'Bancário',
+    context: "Família bancária, fundadores do Itaú",
+    relatedPeople: ["Olavo Setúbal", "Roberto Setúbal"],
+    sector: "Bancário",
   },
   moreira: {
-    context: 'Família com tradição no setor bancário',
-    relatedPeople: ['Walther Moreira Salles', 'Banco Itaú'],
-    sector: 'Bancário',
+    context: "Família com tradição no setor bancário",
+    relatedPeople: ["Walther Moreira Salles", "Banco Itaú"],
+    sector: "Bancário",
   },
   villela: {
-    context: 'Família acionista do Itaú Unibanco',
-    relatedPeople: ['Alfredo Egydio Arruda Villela'],
-    sector: 'Bancário',
+    context: "Família acionista do Itaú Unibanco",
+    relatedPeople: ["Alfredo Egydio Arruda Villela"],
+    sector: "Bancário",
   },
   simonsen: {
-    context: 'Família de economistas e empresários',
-    relatedPeople: ['Mário Henrique Simonsen'],
-    sector: 'Economia/Finanças',
+    context: "Família de economistas e empresários",
+    relatedPeople: ["Mário Henrique Simonsen"],
+    sector: "Economia/Finanças",
   },
   esteves: {
-    context: 'Família do BTG Pactual',
-    relatedPeople: ['André Esteves', 'BTG Pactual'],
-    sector: 'Bancário/Investimentos',
+    context: "Família do BTG Pactual",
+    relatedPeople: ["André Esteves", "BTG Pactual"],
+    sector: "Bancário/Investimentos",
   },
 
   // ========== INVESTIMENTOS/PRIVATE EQUITY ==========
   lemann: {
-    context: 'Família empresarial, sócios da 3G Capital',
-    relatedPeople: ['Jorge Paulo Lemann', 'AB InBev', 'Kraft Heinz'],
-    sector: 'Investimentos/Bebidas',
+    context: "Família empresarial, sócios da 3G Capital",
+    relatedPeople: ["Jorge Paulo Lemann", "AB InBev", "Kraft Heinz"],
+    sector: "Investimentos/Bebidas",
   },
   sicupira: {
-    context: 'Sócio da 3G Capital',
-    relatedPeople: ['Carlos Alberto Sicupira', 'AB InBev'],
-    sector: 'Investimentos',
+    context: "Sócio da 3G Capital",
+    relatedPeople: ["Carlos Alberto Sicupira", "AB InBev"],
+    sector: "Investimentos",
   },
   telles: {
-    context: 'Sócio da 3G Capital',
-    relatedPeople: ['Marcel Telles', 'AB InBev'],
-    sector: 'Investimentos',
+    context: "Sócio da 3G Capital",
+    relatedPeople: ["Marcel Telles", "AB InBev"],
+    sector: "Investimentos",
   },
   garantia: {
-    context: 'Fundadores do Banco Garantia',
-    relatedPeople: ['Lemann, Sicupira, Telles'],
-    sector: 'Investimentos',
+    context: "Fundadores do Banco Garantia",
+    relatedPeople: ["Lemann, Sicupira, Telles"],
+    sector: "Investimentos",
   },
 
   // ========== MÍDIA/COMUNICAÇÃO ==========
   marinho: {
-    context: 'Família proprietária das Organizações Globo',
-    relatedPeople: ['Roberto Marinho', 'João Roberto Marinho'],
-    sector: 'Mídia/Comunicação',
+    context: "Família proprietária das Organizações Globo",
+    relatedPeople: ["Roberto Marinho", "João Roberto Marinho"],
+    sector: "Mídia/Comunicação",
   },
   civita: {
-    context: 'Família fundadora do Grupo Abril',
-    relatedPeople: ['Victor Civita', 'Roberto Civita'],
-    sector: 'Mídia/Editora',
+    context: "Família fundadora do Grupo Abril",
+    relatedPeople: ["Victor Civita", "Roberto Civita"],
+    sector: "Mídia/Editora",
   },
   frias: {
-    context: 'Família controladora do Grupo Folha',
-    relatedPeople: ['Octavio Frias de Oliveira', 'Folha de S.Paulo'],
-    sector: 'Mídia/Jornalismo',
+    context: "Família controladora do Grupo Folha",
+    relatedPeople: ["Octavio Frias de Oliveira", "Folha de S.Paulo"],
+    sector: "Mídia/Jornalismo",
   },
   mesquita: {
-    context: 'Família proprietária do Estadão',
-    relatedPeople: ['Julio de Mesquita', 'O Estado de S. Paulo'],
-    sector: 'Mídia/Jornalismo',
+    context: "Família proprietária do Estadão",
+    relatedPeople: ["Julio de Mesquita", "O Estado de S. Paulo"],
+    sector: "Mídia/Jornalismo",
   },
 
   // ========== INDUSTRIAL ==========
   ermírio: {
-    context: 'Família fundadora do Grupo Votorantim',
-    relatedPeople: ['Antônio Ermírio de Moraes', 'Grupo Votorantim'],
-    sector: 'Industrial/Mineração',
+    context: "Família fundadora do Grupo Votorantim",
+    relatedPeople: ["Antônio Ermírio de Moraes", "Grupo Votorantim"],
+    sector: "Industrial/Mineração",
   },
   votorantim: {
-    context: 'Grupo industrial brasileiro',
-    relatedPeople: ['Família Ermírio de Moraes'],
-    sector: 'Industrial',
+    context: "Grupo industrial brasileiro",
+    relatedPeople: ["Família Ermírio de Moraes"],
+    sector: "Industrial",
   },
   steinbruch: {
-    context: 'Família controladora da CSN',
-    relatedPeople: ['Benjamin Steinbruch', 'CSN'],
-    sector: 'Siderurgia',
+    context: "Família controladora da CSN",
+    relatedPeople: ["Benjamin Steinbruch", "CSN"],
+    sector: "Siderurgia",
   },
   gerdau: {
-    context: 'Família fundadora do Grupo Gerdau',
-    relatedPeople: ['Jorge Gerdau', 'Grupo Gerdau'],
-    sector: 'Siderurgia',
+    context: "Família fundadora do Grupo Gerdau",
+    relatedPeople: ["Jorge Gerdau", "Grupo Gerdau"],
+    sector: "Siderurgia",
   },
   camargo: {
-    context: 'Família fundadora da Camargo Corrêa',
-    relatedPeople: ['Sebastião Camargo', 'Camargo Corrêa'],
-    sector: 'Construção/Infraestrutura',
+    context: "Família fundadora da Camargo Corrêa",
+    relatedPeople: ["Sebastião Camargo", "Camargo Corrêa"],
+    sector: "Construção/Infraestrutura",
   },
   odebrecht: {
-    context: 'Família fundadora da Odebrecht',
-    relatedPeople: ['Norberto Odebrecht', 'Marcelo Odebrecht'],
-    sector: 'Construção/Infraestrutura',
+    context: "Família fundadora da Odebrecht",
+    relatedPeople: ["Norberto Odebrecht", "Marcelo Odebrecht"],
+    sector: "Construção/Infraestrutura",
   },
   andrade: {
-    context: 'Família da Andrade Gutierrez',
-    relatedPeople: ['Grupo Andrade Gutierrez'],
-    sector: 'Construção/Infraestrutura',
+    context: "Família da Andrade Gutierrez",
+    relatedPeople: ["Grupo Andrade Gutierrez"],
+    sector: "Construção/Infraestrutura",
   },
 
   // ========== VAREJO ==========
   diniz: {
-    context: 'Família fundadora do Grupo Pão de Açúcar',
-    relatedPeople: ['Abilio Diniz', 'Grupo Pão de Açúcar'],
-    sector: 'Varejo',
+    context: "Família fundadora do Grupo Pão de Açúcar",
+    relatedPeople: ["Abilio Diniz", "Grupo Pão de Açúcar"],
+    sector: "Varejo",
   },
   klein: {
-    context: 'Família fundadora das Casas Bahia',
-    relatedPeople: ['Samuel Klein', 'Michael Klein', 'Via Varejo'],
-    sector: 'Varejo',
+    context: "Família fundadora das Casas Bahia",
+    relatedPeople: ["Samuel Klein", "Michael Klein", "Via Varejo"],
+    sector: "Varejo",
   },
   trajano: {
-    context: 'Família controladora do Magazine Luiza',
-    relatedPeople: ['Luiza Helena Trajano', 'Magazine Luiza'],
-    sector: 'Varejo',
+    context: "Família controladora do Magazine Luiza",
+    relatedPeople: ["Luiza Helena Trajano", "Magazine Luiza"],
+    sector: "Varejo",
   },
   feffer: {
-    context: 'Família controladora da Suzano',
-    relatedPeople: ['David Feffer', 'Suzano Papel e Celulose'],
-    sector: 'Papel e Celulose',
+    context: "Família controladora da Suzano",
+    relatedPeople: ["David Feffer", "Suzano Papel e Celulose"],
+    sector: "Papel e Celulose",
   },
 
   // ========== ALIMENTOS/AGRO ==========
   batista: {
-    context: 'Família fundadora da JBS',
-    relatedPeople: ['Joesley Batista', 'Wesley Batista', 'JBS'],
-    sector: 'Alimentos/Carnes',
+    context: "Família fundadora da JBS",
+    relatedPeople: ["Joesley Batista", "Wesley Batista", "JBS"],
+    sector: "Alimentos/Carnes",
   },
   maggi: {
-    context: 'Família do agronegócio',
-    relatedPeople: ['Blairo Maggi', 'Grupo Amaggi'],
-    sector: 'Agronegócio',
+    context: "Família do agronegócio",
+    relatedPeople: ["Blairo Maggi", "Grupo Amaggi"],
+    sector: "Agronegócio",
   },
   ometto: {
-    context: 'Família do setor sucroalcooleiro',
-    relatedPeople: ['Rubens Ometto', 'Cosan', 'Raízen'],
-    sector: 'Energia/Açúcar',
+    context: "Família do setor sucroalcooleiro",
+    relatedPeople: ["Rubens Ometto", "Cosan", "Raízen"],
+    sector: "Energia/Açúcar",
   },
 
   // ========== IMOBILIÁRIO (São Paulo) ==========
   horn: {
-    context: 'Família do mercado imobiliário de luxo em SP',
-    relatedPeople: ['Adolpho Lindenberg Horn', 'Lindenberg Construtora'],
-    sector: 'Imobiliário',
+    context: "Família do mercado imobiliário de luxo em SP",
+    relatedPeople: ["Adolpho Lindenberg Horn", "Lindenberg Construtora"],
+    sector: "Imobiliário",
   },
   lindenberg: {
-    context: 'Construtora de alto padrão em São Paulo',
-    relatedPeople: ['Adolpho Lindenberg', 'Lindenberg Construtora'],
-    sector: 'Imobiliário',
+    context: "Construtora de alto padrão em São Paulo",
+    relatedPeople: ["Adolpho Lindenberg", "Lindenberg Construtora"],
+    sector: "Imobiliário",
   },
   cyrela: {
-    context: 'Uma das maiores incorporadoras do Brasil',
-    relatedPeople: ['Elie Horn', 'Cyrela Brazil Realty'],
-    sector: 'Imobiliário',
+    context: "Uma das maiores incorporadoras do Brasil",
+    relatedPeople: ["Elie Horn", "Cyrela Brazil Realty"],
+    sector: "Imobiliário",
   },
   safdie: {
-    context: 'Família de incorporadores em SP',
-    relatedPeople: ['Alberto Safdie', 'Safdie Construtora'],
-    sector: 'Imobiliário',
+    context: "Família de incorporadores em SP",
+    relatedPeople: ["Alberto Safdie", "Safdie Construtora"],
+    sector: "Imobiliário",
   },
   trisul: {
-    context: 'Incorporadora de São Paulo',
-    relatedPeople: ['Jorge Cury', 'Trisul'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de São Paulo",
+    relatedPeople: ["Jorge Cury", "Trisul"],
+    sector: "Imobiliário",
   },
   rossi: {
-    context: 'Família de incorporadores',
-    relatedPeople: ['Rossi Residencial'],
-    sector: 'Imobiliário',
+    context: "Família de incorporadores",
+    relatedPeople: ["Rossi Residencial"],
+    sector: "Imobiliário",
   },
   even: {
-    context: 'Incorporadora de alto padrão',
-    relatedPeople: ['Carlos Terepins', 'Even Construtora'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de alto padrão",
+    relatedPeople: ["Carlos Terepins", "Even Construtora"],
+    sector: "Imobiliário",
   },
   eztec: {
-    context: 'Incorporadora de São Paulo',
-    relatedPeople: ['Ernesto Zarzur', 'EZTEC'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de São Paulo",
+    relatedPeople: ["Ernesto Zarzur", "EZTEC"],
+    sector: "Imobiliário",
   },
   zarzur: {
-    context: 'Família fundadora da EZTEC',
-    relatedPeople: ['Ernesto Zarzur', 'EZTEC'],
-    sector: 'Imobiliário',
+    context: "Família fundadora da EZTEC",
+    relatedPeople: ["Ernesto Zarzur", "EZTEC"],
+    sector: "Imobiliário",
   },
   gafisa: {
-    context: 'Incorporadora tradicional',
-    relatedPeople: ['Gafisa S.A.'],
-    sector: 'Imobiliário',
+    context: "Incorporadora tradicional",
+    relatedPeople: ["Gafisa S.A."],
+    sector: "Imobiliário",
   },
   tecnisa: {
-    context: 'Incorporadora de São Paulo',
-    relatedPeople: ['Meyer Nigri', 'Tecnisa'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de São Paulo",
+    relatedPeople: ["Meyer Nigri", "Tecnisa"],
+    sector: "Imobiliário",
   },
   nigri: {
-    context: 'Família da Tecnisa',
-    relatedPeople: ['Meyer Nigri', 'Tecnisa'],
-    sector: 'Imobiliário',
+    context: "Família da Tecnisa",
+    relatedPeople: ["Meyer Nigri", "Tecnisa"],
+    sector: "Imobiliário",
   },
   wtorre: {
-    context: 'Construtora de grandes empreendimentos',
-    relatedPeople: ['Walter Torre Jr', 'WTorre'],
-    sector: 'Imobiliário',
+    context: "Construtora de grandes empreendimentos",
+    relatedPeople: ["Walter Torre Jr", "WTorre"],
+    sector: "Imobiliário",
   },
   torre: {
-    context: 'Construtora de grandes empreendimentos',
-    relatedPeople: ['Walter Torre Jr', 'WTorre'],
-    sector: 'Imobiliário',
+    context: "Construtora de grandes empreendimentos",
+    relatedPeople: ["Walter Torre Jr", "WTorre"],
+    sector: "Imobiliário",
   },
   jhsf: {
-    context: 'Incorporadora de alto luxo',
-    relatedPeople: ['José Auriemo', 'JHSF', 'Fazenda Boa Vista', 'Shopping Cidade Jardim'],
-    sector: 'Imobiliário/Luxo',
+    context: "Incorporadora de alto luxo",
+    relatedPeople: [
+      "José Auriemo",
+      "JHSF",
+      "Fazenda Boa Vista",
+      "Shopping Cidade Jardim",
+    ],
+    sector: "Imobiliário/Luxo",
   },
   auriemo: {
-    context: 'Família fundadora da JHSF',
-    relatedPeople: ['José Auriemo Neto', 'JHSF'],
-    sector: 'Imobiliário/Luxo',
+    context: "Família fundadora da JHSF",
+    relatedPeople: ["José Auriemo Neto", "JHSF"],
+    sector: "Imobiliário/Luxo",
   },
   yuny: {
-    context: 'Incorporadora de São Paulo',
-    relatedPeople: ['Yuny Incorporadora'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de São Paulo",
+    relatedPeople: ["Yuny Incorporadora"],
+    sector: "Imobiliário",
   },
   stan: {
-    context: 'Incorporadora de alto padrão',
-    relatedPeople: ['Stan Desenvolvimento Imobiliário'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de alto padrão",
+    relatedPeople: ["Stan Desenvolvimento Imobiliário"],
+    sector: "Imobiliário",
   },
   tegra: {
-    context: 'Incorporadora do Brookfield',
-    relatedPeople: ['Tegra Incorporadora'],
-    sector: 'Imobiliário',
+    context: "Incorporadora do Brookfield",
+    relatedPeople: ["Tegra Incorporadora"],
+    sector: "Imobiliário",
   },
   kallas: {
-    context: 'Incorporadora de São Paulo',
-    relatedPeople: ['Kallas Incorporações'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de São Paulo",
+    relatedPeople: ["Kallas Incorporações"],
+    sector: "Imobiliário",
   },
   helbor: {
-    context: 'Incorporadora nacional',
-    relatedPeople: ['Helbor Empreendimentos'],
-    sector: 'Imobiliário',
+    context: "Incorporadora nacional",
+    relatedPeople: ["Helbor Empreendimentos"],
+    sector: "Imobiliário",
   },
   ecoville: {
-    context: 'Incorporadora de alto padrão',
-    relatedPeople: ['Ecoville Urbanismo'],
-    sector: 'Imobiliário',
+    context: "Incorporadora de alto padrão",
+    relatedPeople: ["Ecoville Urbanismo"],
+    sector: "Imobiliário",
   },
 
   // ========== AVIAÇÃO/TRANSPORTE ==========
   constantino: {
-    context: 'Família fundadora da Gol Linhas Aéreas',
-    relatedPeople: ['Constantino de Oliveira Jr', 'Gol'],
-    sector: 'Aviação',
+    context: "Família fundadora da Gol Linhas Aéreas",
+    relatedPeople: ["Constantino de Oliveira Jr", "Gol"],
+    sector: "Aviação",
   },
   amaro: {
-    context: 'Família fundadora da TAM',
-    relatedPeople: ['Rolim Amaro', 'TAM Linhas Aéreas'],
-    sector: 'Aviação',
+    context: "Família fundadora da TAM",
+    relatedPeople: ["Rolim Amaro", "TAM Linhas Aéreas"],
+    sector: "Aviação",
   },
 
   // ========== TECNOLOGIA ==========
   vélez: {
-    context: 'Fundador do Nubank',
-    relatedPeople: ['David Vélez', 'Nubank'],
-    sector: 'Fintech',
+    context: "Fundador do Nubank",
+    relatedPeople: ["David Vélez", "Nubank"],
+    sector: "Fintech",
   },
   velez: {
-    context: 'Fundador do Nubank',
-    relatedPeople: ['David Vélez', 'Nubank'],
-    sector: 'Fintech',
+    context: "Fundador do Nubank",
+    relatedPeople: ["David Vélez", "Nubank"],
+    sector: "Fintech",
   },
   krieger: {
-    context: 'Fundador do PagSeguro',
-    relatedPeople: ['Luiz Frias', 'PagSeguro'],
-    sector: 'Fintech',
+    context: "Fundador do PagSeguro",
+    relatedPeople: ["Luiz Frias", "PagSeguro"],
+    sector: "Fintech",
   },
 
   // ========== SAÚDE ==========
   bueno: {
-    context: 'Família fundadora da Amil',
-    relatedPeople: ['Edson Bueno', 'Amil', 'Dasa'],
-    sector: 'Saúde',
+    context: "Família fundadora da Amil",
+    relatedPeople: ["Edson Bueno", "Amil", "Dasa"],
+    sector: "Saúde",
   },
   moll: {
-    context: 'Família fundadora da Rede D\'Or',
-    relatedPeople: ['Jorge Moll', 'Rede D\'Or São Luiz'],
-    sector: 'Saúde',
+    context: "Família fundadora da Rede D'Or",
+    relatedPeople: ["Jorge Moll", "Rede D'Or São Luiz"],
+    sector: "Saúde",
   },
 
   // ========== BEBIDAS ==========
   schincariol: {
-    context: 'Família fundadora da Schincariol',
-    relatedPeople: ['Adriano Schincariol', 'Cervejaria Schincariol'],
-    sector: 'Bebidas',
+    context: "Família fundadora da Schincariol",
+    relatedPeople: ["Adriano Schincariol", "Cervejaria Schincariol"],
+    sector: "Bebidas",
   },
   johannpeter: {
-    context: 'Família controladora da Gerdau',
-    relatedPeople: ['Jorge Gerdau Johannpeter'],
-    sector: 'Siderurgia',
+    context: "Família controladora da Gerdau",
+    relatedPeople: ["Jorge Gerdau Johannpeter"],
+    sector: "Siderurgia",
   },
 
   // ========== LIBANESES EMPRESÁRIOS ==========
   jafet: {
-    context: 'Família tradicional de empresários libaneses',
-    relatedPeople: ['Nami Jafet', 'Basílio Jafet'],
-    sector: 'Diversificado',
+    context: "Família tradicional de empresários libaneses",
+    relatedPeople: ["Nami Jafet", "Basílio Jafet"],
+    sector: "Diversificado",
   },
   klabin: {
-    context: 'Família da indústria de papel',
-    relatedPeople: ['Klabin S.A.'],
-    sector: 'Papel e Celulose',
+    context: "Família da indústria de papel",
+    relatedPeople: ["Klabin S.A."],
+    sector: "Papel e Celulose",
   },
   lafer: {
-    context: 'Família de industriais e políticos',
-    relatedPeople: ['Celso Lafer', 'Horacio Lafer'],
-    sector: 'Industrial/Político',
+    context: "Família de industriais e políticos",
+    relatedPeople: ["Celso Lafer", "Horacio Lafer"],
+    sector: "Industrial/Político",
   },
   mindlin: {
-    context: 'Família de empresários e colecionadores',
-    relatedPeople: ['José Mindlin', 'Brasilpar'],
-    sector: 'Finanças/Cultura',
+    context: "Família de empresários e colecionadores",
+    relatedPeople: ["José Mindlin", "Brasilpar"],
+    sector: "Finanças/Cultura",
   },
 };
 
 // Sobrenomes muito comuns no Brasil (não geram insight)
 const COMMON_SURNAMES = new Set([
-  'silva',
-  'santos',
-  'oliveira',
-  'souza',
-  'sousa',
-  'lima',
-  'pereira',
-  'costa',
-  'rodrigues',
-  'almeida',
-  'nascimento',
-  'ferreira',
-  'araújo',
-  'araujo',
-  'carvalho',
-  'gomes',
-  'martins',
-  'rocha',
-  'ribeiro',
-  'alves',
-  'monteiro',
-  'mendes',
-  'barros',
-  'freitas',
-  'barbosa',
-  'pinto',
-  'moura',
-  'cavalcanti',
-  'dias',
-  'castro',
-  'campos',
-  'cardoso',
-  'andrade',
-  'vieira',
-  'moreira',
-  'nunes',
-  'lopes',
-  'fernandes',
-  'ramos',
-  'gonçalves',
-  'gonzalves',
-  'machado',
-  'marques',
-  'melo',
-  'correia',
-  'azevedo',
-  'teixeira',
-  'batista',
+  "silva",
+  "santos",
+  "oliveira",
+  "souza",
+  "sousa",
+  "lima",
+  "pereira",
+  "costa",
+  "rodrigues",
+  "almeida",
+  "nascimento",
+  "ferreira",
+  "araújo",
+  "araujo",
+  "carvalho",
+  "gomes",
+  "martins",
+  "rocha",
+  "ribeiro",
+  "alves",
+  "monteiro",
+  "mendes",
+  "barros",
+  "freitas",
+  "barbosa",
+  "pinto",
+  "moura",
+  "cavalcanti",
+  "dias",
+  "castro",
+  "campos",
+  "cardoso",
+  "andrade",
+  "vieira",
+  "moreira",
+  "nunes",
+  "lopes",
+  "fernandes",
+  "ramos",
+  "gonçalves",
+  "gonzalves",
+  "machado",
+  "marques",
+  "melo",
+  "correia",
+  "azevedo",
+  "teixeira",
+  "batista",
 ]);
 
 /**
@@ -605,8 +613,10 @@ export function extractSurnames(fullName: string): string[] {
   const parts = normalized.split(/\s+/);
 
   // Remove primeiro nome e preposições
-  const prepositions = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
-  const surnames = parts.slice(1).filter((p) => !prepositions.has(p) && p.length > 2);
+  const prepositions = new Set(["de", "da", "do", "das", "dos", "e"]);
+  const surnames = parts
+    .slice(1)
+    .filter((p) => !prepositions.has(p) && p.length > 2);
 
   return surnames;
 }
@@ -614,11 +624,32 @@ export function extractSurnames(fullName: string): string[] {
 /**
  * Analisa um sobrenome específico
  */
+// Sobrenomes que estão em NOTABLE_FAMILIES mas são MUITO comuns no Brasil
+// Estes NÃO devem ser considerados "família notável" sozinhos pois geram falsos positivos
+// Ex: "Camargo" é muito comum, não significa que é da família Camargo Corrêa
+const TOO_COMMON_FOR_NOTABLE = new Set([
+  "camargo", // Muito comum - Camargo Corrêa é específico
+  "andrade", // Muito comum - Andrade Gutierrez é específico
+  "batista", // Muito comum - JBS é específico
+  "diniz", // Comum - Abilio Diniz é específico
+  "moreira", // Muito comum
+  "bueno", // Comum
+  "constantino", // Relativamente comum
+  "amaro", // Comum
+  "torre", // Comum
+  "klein", // Relativamente comum
+  "trajano", // Comum
+  "telles", // Comum
+  "esteves", // Comum
+  "maggi", // Relativamente comum
+]);
+
 export function analyzeSurname(surname: string): SurnameAnalysis {
   const normalized = surname.toLowerCase().trim();
 
-  // Verifica se é família notável
-  if (NOTABLE_FAMILIES[normalized]) {
+  // Verifica se é família notável MAS não é sobrenome muito comum
+  // Sobrenomes muito comuns (Camargo, Andrade, etc) não devem disparar como "família notável"
+  if (NOTABLE_FAMILIES[normalized] && !TOO_COMMON_FOR_NOTABLE.has(normalized)) {
     const family = NOTABLE_FAMILIES[normalized];
     return {
       surname: normalized,
@@ -652,7 +683,8 @@ export function analyzeSurname(surname: string): SurnameAnalysis {
 
   // Sobrenome desconhecido - pode ser raro
   // Heurística: sobrenomes curtos ou muito longos tendem a ser incomuns
-  const isLikelyRare = normalized.length > 10 || (normalized.length < 5 && normalized.length > 2);
+  const isLikelyRare =
+    normalized.length > 10 || (normalized.length < 5 && normalized.length > 2);
 
   return {
     surname: normalized,
@@ -671,9 +703,63 @@ export function analyzeFullName(fullName: string): SurnameAnalysis[] {
 }
 
 /**
+ * Normaliza nome para comparação (remove acentos, lowercase, trim)
+ */
+function normalizeNameForComparison(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Verifica se dois nomes são essencialmente a mesma pessoa
+ */
+function isSamePerson(name1: string, name2: string): boolean {
+  const norm1 = normalizeNameForComparison(name1);
+  const norm2 = normalizeNameForComparison(name2);
+
+  // Exatamente iguais
+  if (norm1 === norm2) return true;
+
+  // Um contém o outro (ex: "Ana Maria" vs "Ana Maria Pereira Ribeiro")
+  const words1 = norm1.split(" ");
+  const words2 = norm2.split(" ");
+
+  // Se todas as palavras de um estão no outro, é a mesma pessoa
+  const allWords1InWords2 = words1.every((w) => words2.includes(w));
+  const allWords2InWords1 = words2.every((w) => words1.includes(w));
+
+  if (allWords1InWords2 || allWords2InWords1) return true;
+
+  // Se primeiro e último nome são iguais, provavelmente é a mesma pessoa
+  if (words1.length >= 2 && words2.length >= 2) {
+    const sameFirst = words1[0] === words2[0];
+    const sameLast = words1[words1.length - 1] === words2[words2.length - 1];
+    if (sameFirst && sameLast) return true;
+  }
+
+  return false;
+}
+
+/**
  * Detecta conexão familiar entre dois nomes
  */
-export function detectFamilyConnection(leadName: string, enrichedName: string): FamilyConnection {
+export function detectFamilyConnection(
+  leadName: string,
+  enrichedName: string,
+): FamilyConnection {
+  // PRIMEIRO: Verifica se são a mesma pessoa
+  if (isSamePerson(leadName, enrichedName)) {
+    return {
+      type: "none",
+      confidence: 100,
+      explanation: "Mesma pessoa (nomes correspondem)",
+    };
+  }
+
   const leadSurnames = new Set(extractSurnames(leadName));
   const enrichedSurnames = extractSurnames(enrichedName);
 
@@ -682,9 +768,9 @@ export function detectFamilyConnection(leadName: string, enrichedName: string): 
 
   if (sharedSurnames.length === 0) {
     return {
-      type: 'none',
+      type: "none",
       confidence: 0,
-      explanation: 'Nenhum sobrenome em comum encontrado',
+      explanation: "Nenhum sobrenome em comum encontrado",
     };
   }
 
@@ -704,7 +790,7 @@ export function detectFamilyConnection(leadName: string, enrichedName: string): 
 
     if (isNicknameMatch) {
       return {
-        type: 'relative',
+        type: "relative",
         sharedSurname,
         confidence: 70,
         explanation: `Possível variação do mesmo nome com sobrenome ${sharedSurname}`,
@@ -713,7 +799,7 @@ export function detectFamilyConnection(leadName: string, enrichedName: string): 
 
     // Alta confiança de ser cônjuge ou familiar direto
     return {
-      type: 'spouse',
+      type: "spouse",
       sharedSurname,
       confidence: 85,
       explanation: `Provável cônjuge ou familiar - compartilham sobrenome "${sharedSurname}"`,
@@ -721,7 +807,7 @@ export function detectFamilyConnection(leadName: string, enrichedName: string): 
   }
 
   return {
-    type: 'relative',
+    type: "relative",
     sharedSurname,
     confidence: 60,
     explanation: `Mesmo primeiro nome e sobrenome - possível duplicata ou homônimo`,
@@ -735,7 +821,7 @@ export function detectConcatenatedName(name: string): ConcatenatedName {
   const normalized = name.toLowerCase().trim();
 
   // Se já tem espaço, não está concatenado
-  if (normalized.includes(' ')) {
+  if (normalized.includes(" ")) {
     return { detected: false, confidence: 100 };
   }
 
@@ -753,8 +839,14 @@ export function detectConcatenatedName(name: string): ConcatenatedName {
 
   // Procura por sobrenomes conhecidos no final
   for (const surname of [...RARE_SURNAMES, ...COMMON_SURNAMES]) {
-    if (normalized.endsWith(surname) && normalized.length > surname.length + 2) {
-      const firstName = normalized.substring(0, normalized.length - surname.length);
+    if (
+      normalized.endsWith(surname) &&
+      normalized.length > surname.length + 2
+    ) {
+      const firstName = normalized.substring(
+        0,
+        normalized.length - surname.length,
+      );
       // Verifica se o firstName parece um nome válido (3-10 chars)
       if (firstName.length >= 3 && firstName.length <= 10) {
         return {
@@ -781,35 +873,38 @@ export function detectConcatenatedName(name: string): ConcatenatedName {
 /**
  * Verifica se é telefone internacional
  */
-export function isInternationalPhone(phone: string): { isInternational: boolean; country?: string } {
-  const cleaned = phone.replace(/\D/g, '');
+export function isInternationalPhone(phone: string): {
+  isInternational: boolean;
+  country?: string;
+} {
+  const cleaned = phone.replace(/\D/g, "");
 
   // Mapeamento de códigos de país
   const countryCodes: Record<string, string> = {
-    '27': 'África do Sul',
-    '1': 'Estados Unidos/Canadá',
-    '44': 'Reino Unido',
-    '351': 'Portugal',
-    '34': 'Espanha',
-    '33': 'França',
-    '49': 'Alemanha',
-    '39': 'Itália',
-    '81': 'Japão',
-    '86': 'China',
-    '971': 'Emirados Árabes',
-    '972': 'Israel',
-    '41': 'Suíça',
-    '43': 'Áustria',
-    '598': 'Uruguai',
-    '595': 'Paraguai',
-    '54': 'Argentina',
-    '56': 'Chile',
-    '57': 'Colômbia',
-    '51': 'Peru',
+    "27": "África do Sul",
+    "1": "Estados Unidos/Canadá",
+    "44": "Reino Unido",
+    "351": "Portugal",
+    "34": "Espanha",
+    "33": "França",
+    "49": "Alemanha",
+    "39": "Itália",
+    "81": "Japão",
+    "86": "China",
+    "971": "Emirados Árabes",
+    "972": "Israel",
+    "41": "Suíça",
+    "43": "Áustria",
+    "598": "Uruguai",
+    "595": "Paraguai",
+    "54": "Argentina",
+    "56": "Chile",
+    "57": "Colômbia",
+    "51": "Peru",
   };
 
   // Se começa com 55, é Brasil
-  if (cleaned.startsWith('55')) {
+  if (cleaned.startsWith("55")) {
     return { isInternational: false };
   }
 
@@ -838,7 +933,7 @@ export function calculateLeadScore(analysis: {
   isInternational: boolean;
   income?: number;
   propertyCount?: number;
-}): { score: number; tier: 'platinum' | 'gold' | 'silver' | 'bronze' } {
+}): { score: number; tier: "platinum" | "gold" | "silver" | "bronze" } {
   let score = 0;
 
   // Família notável: +40 pontos
@@ -862,11 +957,11 @@ export function calculateLeadScore(analysis: {
   }
 
   // Determina tier
-  let tier: 'platinum' | 'gold' | 'silver' | 'bronze';
-  if (score >= 70) tier = 'platinum';
-  else if (score >= 50) tier = 'gold';
-  else if (score >= 30) tier = 'silver';
-  else tier = 'bronze';
+  let tier: "platinum" | "gold" | "silver" | "bronze";
+  if (score >= 70) tier = "platinum";
+  else if (score >= 50) tier = "gold";
+  else if (score >= 30) tier = "silver";
+  else tier = "bronze";
 
   return { score, tier };
 }

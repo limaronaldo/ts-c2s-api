@@ -117,6 +117,12 @@ const configSchema = z.object({
     .string()
     .default("true")
     .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // Lead Analysis settings (RML-872 - deep lead analysis)
+  ENABLE_LEAD_ANALYSIS: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
 });
 
 export type Config = z.infer<typeof configSchema>;

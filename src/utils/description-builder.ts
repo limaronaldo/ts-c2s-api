@@ -1,6 +1,7 @@
 import type { WorkApiPerson } from "../services/work-api.service";
-import { formatCpf } from "./normalize";
+import { formatCpf, normalizeIncome } from "./normalize";
 import { formatPhone } from "./phone";
+import { getConfig } from "../config";
 
 /**
  * Format currency in Brazilian Real
@@ -11,6 +12,17 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+/**
+ * Get income multiplier from config
+ */
+function getIncomeMultiplier(): number {
+  try {
+    return getConfig().INCOME_MULTIPLIER;
+  } catch {
+    return 1.9; // Default
+  }
 }
 
 /**
@@ -45,15 +57,17 @@ export function buildDescription(
     lines.push(`Mãe: ${person.nomeMae}`);
   }
 
-  // Financial info
-  if (person.renda || person.rendaPresumida || person.patrimonio) {
+  // Financial info (renda removed, only renda presumida and patrimônio kept)
+  const multiplier = getIncomeMultiplier();
+  const adjustedRendaPresumida = person.rendaPresumida
+    ? normalizeIncome(person.rendaPresumida, multiplier)
+    : null;
+
+  if (adjustedRendaPresumida || person.patrimonio) {
     lines.push("");
-    if (person.renda) {
-      lines.push(`Renda: R$ ${formatCurrency(person.renda)}`);
-    }
-    if (person.rendaPresumida) {
+    if (adjustedRendaPresumida) {
       lines.push(
-        `Renda Presumida: R$ ${formatCurrency(person.rendaPresumida)}`,
+        `Renda Presumida: R$ ${formatCurrency(adjustedRendaPresumida)}`,
       );
     }
     if (person.patrimonio) {

@@ -55,6 +55,8 @@ export interface WorkApiFetchResult {
  *
  * Timeout Handling: 15-second timeout with graceful fallback
  * Reference: Lead Operations Guide - "15-second timeout for Work API with partial fallback"
+ *
+ * Rate Limiting: Enforces minimum 2s delay between requests to avoid API throttling
  */
 export class WorkApiService {
   private readonly apiKey: string;
@@ -64,10 +66,35 @@ export class WorkApiService {
   // Increased to 30s due to slower connectivity from Fly.io to Work API
   private readonly TIMEOUT_MS = 30000; // 30 seconds
 
+  // Rate limiting - prevents Work API throttling
+  // Shared across all instances via static property
+  private static lastRequestTime: number = 0;
+  private static readonly RATE_LIMIT_MS = 2000; // 2 seconds minimum between requests
+
   constructor() {
     const config = getConfig();
     this.apiKey = config.WORK_API;
     this.baseUrl = config.WORK_API_URL;
+  }
+
+  /**
+   * Enforces rate limiting by waiting if needed before making a request
+   * This prevents Work API from throttling our requests
+   */
+  private async enforceRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - WorkApiService.lastRequestTime;
+
+    if (timeSinceLastRequest < WorkApiService.RATE_LIMIT_MS) {
+      const waitTime = WorkApiService.RATE_LIMIT_MS - timeSinceLastRequest;
+      workApiLogger.debug(
+        { waitTime },
+        "Rate limiting: waiting before next Work API request",
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+
+    WorkApiService.lastRequestTime = Date.now();
   }
 
   /**
@@ -90,6 +117,9 @@ export class WorkApiService {
       workApiLogger.debug({ cpf }, "Cache hit for Work API");
       return { data: cached, timedOut: false };
     }
+
+    // Enforce rate limiting before making request
+    await this.enforceRateLimit();
 
     workApiLogger.info({ cpf }, "Fetching from Work API");
 
@@ -157,10 +187,43 @@ export class WorkApiService {
 
       const rawData = await response.json();
 
+      // RML-811: Log raw response for debugging
+      workApiLogger.info(
+        {
+          cpf,
+          hasErro: !!rawData.erro,
+          hasDadosBasicos: !!rawData.DadosBasicos,
+          hasData: !!rawData.data,
+          status: rawData.status,
+          keys: Object.keys(rawData).slice(0, 10),
+        },
+        "Work API raw response structure",
+      );
+
+      // Work API returns HTTP 200 but with internal status codes for errors
+      // Check for 403 Forbidden (token expired/invalid/limit reached)
+      if (rawData.status === 403) {
+        workApiLogger.error(
+          {
+            cpf,
+            status: rawData.status,
+            statusMsg: rawData.statusMsg,
+            reason: rawData.reason,
+          },
+          "Work API token error - token vencido/inválido ou limite atingido",
+        );
+        // Return as timedOut to trigger partial enrichment instead of basic
+        return {
+          data: null,
+          timedOut: true,
+          error: rawData.reason || "Token error",
+        };
+      }
+
       // Work API returns data directly with DadosBasicos, not wrapped in success/data
       // Check for error response
       if (rawData.erro) {
-        workApiLogger.debug(
+        workApiLogger.warn(
           { cpf, error: rawData.erro },
           "Work API returned error",
         );
@@ -168,7 +231,10 @@ export class WorkApiService {
       }
 
       if (!rawData.DadosBasicos) {
-        workApiLogger.debug({ cpf }, "Work API returned no data");
+        workApiLogger.warn(
+          { cpf, rawDataKeys: Object.keys(rawData), rawStatus: rawData.status },
+          "Work API returned no DadosBasicos",
+        );
         return { data: null, timedOut: false };
       }
 

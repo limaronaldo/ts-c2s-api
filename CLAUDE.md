@@ -584,6 +584,64 @@ src/
 
 ## Changelog
 
+### January 15, 2026
+
+#### High-Value Lead Alerts Improvements
+- **Fixed duplicate messages**: Removed `WebInsightService.generateInsightsAsync()` from enrichment flow
+  - Before: Lead received 2 messages (Enrichment + Insight with redundant info)
+  - After: Lead receives 1 message (Enrichment only)
+- **Fixed inconsistent income values**: `description-builder.ts` now applies income multiplier (1.9x)
+  - Before: Enrichment showed R$ 13.957, Insight showed R$ 26.520
+  - After: Both show R$ 26.520 (consistent)
+- **Fixed false positive notable families**: Common surnames no longer trigger "família notável"
+  - Added `TOO_COMMON_FOR_NOTABLE` list in `surname-analyzer.ts`
+  - Removed: Camargo, Andrade, Batista, Diniz, Moreira, Bueno, Klein, Trajano, etc.
+  - Before: "Augusto Camargo Neto" → "Família Camargo Corrêa" (false positive)
+  - After: "Camargo" treated as common surname (no alert)
+  - Still notable: Safra, Lemann, Steinbruch, Gerdau, Marinho, Rudge, Setúbal (rare surnames)
+- **Adjusted high-value scoring**:
+  - Very high income (>= R$20k): 50 pts (triggers alert alone)
+  - High income (>= R$15k): 36 pts (needs another factor)
+  - Noble neighborhood: 15 pts
+  - Notable family: 50 pts
+  - Alert threshold: 50+ pts
+
+#### RML-872: Deep Lead Analysis
+- Added automatic deep lead analysis after enrichment
+- New services created:
+  - `WebSearchService` - Google Custom Search integration for person/company lookup
+  - `DomainAnalyzerService` - Email domain analysis to identify companies
+  - `RiskDetectorService` - Risk detection with known individuals database (e.g., Fernandin OIG)
+  - `TierCalculatorService` - Multi-factor tier scoring (Platinum/Gold/Silver/Bronze/Risk)
+  - `LeadAnalysisService` - Orchestrator that coordinates all analysis services
+- New database table `analytics.lead_analyses` stores analysis results
+- Tier scoring based on: income, role, education, neighborhood, company, family name
+- Risk detection for:
+  - Known individuals (CPI das Bets, fraud investigations)
+  - Negative news mentions (lavagem, fraude, investigação)
+  - Suspicious patterns
+- New alert type `lead_risk_detected` for high-risk leads
+- Configuration: `ENABLE_LEAD_ANALYSIS=true` (default)
+- Async execution - doesn't block enrichment response
+
+#### RML-871: PDF Report Generation
+- Added `/dashboard/report` endpoint for PDF generation
+- Professional HTML template with tier-based styling
+- Chrome headless PDF generation via `report.service.ts`
+
+### January 12, 2026
+
+#### RML-811: Fix Duplicate "Nome: Unknown" Messages
+- Fixed issue where leads with name "Unknown" were sending duplicate messages to C2S
+- Added validation in `createUnenrichedCustomer()` to skip message when name is Unknown/empty
+- Added validation in `createBasicCustomer()` to skip message when name is Unknown/empty
+- Modified `processRetries()` in cron job to:
+  - Skip leads with Unknown name (they will never enrich successfully)
+  - Mark them as failed to prevent infinite retry loops
+  - Added `isValidNameForRetry()` helper function
+- Leads with valid names still receive messages as before
+- Status is updated even when message is skipped (for tracking purposes)
+
 ### January 6, 2026
 
 #### RML-809: Smart Cron Schedule

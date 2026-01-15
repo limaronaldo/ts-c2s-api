@@ -9,9 +9,12 @@
  * - Indicadores de alta renda
  */
 
-import { C2SService } from './c2s.service';
-import { CnpjLookupService, type CompanyInfo } from './cnpj-lookup.service';
-import { GoogleSearchService, type PersonInsightFromSearch } from './google-search.service';
+import { C2SService } from "./c2s.service";
+import { CnpjLookupService, type CompanyInfo } from "./cnpj-lookup.service";
+import {
+  GoogleSearchService,
+  type PersonInsightFromSearch,
+} from "./google-search.service";
 import {
   analyzeSurname,
   extractSurnames,
@@ -21,7 +24,7 @@ import {
   calculateLeadScore,
   type SurnameAnalysis,
   type FamilyConnection,
-} from '../utils/surname-analyzer';
+} from "../utils/surname-analyzer";
 import {
   formatInsightMessage,
   createFamilyConnectionInsight,
@@ -35,9 +38,9 @@ import {
   createWebSearchInsight,
   type LeadInsight,
   type InsightContext,
-} from '../utils/insight-formatter';
-import { enrichmentLogger } from '../utils/logger';
-import { getConfig } from '../config';
+} from "../utils/insight-formatter";
+import { enrichmentLogger } from "../utils/logger";
+import { getConfig } from "../config";
 
 export interface LeadInsightData {
   leadId: string;
@@ -49,7 +52,12 @@ export interface LeadInsightData {
   income?: number;
   presumedIncome?: number;
   propertyCount?: number;
-  addressCount?: number;
+  addresses?: Array<{
+    street?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+  }>;
   campaignName?: string;
 }
 
@@ -57,7 +65,7 @@ export interface InsightResult {
   generated: boolean;
   insightCount: number;
   messageSent: boolean;
-  tier?: 'platinum' | 'gold' | 'silver' | 'bronze';
+  tier?: "platinum" | "gold" | "silver" | "bronze";
   insights?: LeadInsight[];
   error?: string;
 }
@@ -79,7 +87,9 @@ export class WebInsightService {
     this.minConfidence = config.INSIGHT_MIN_CONFIDENCE ?? 60;
     this.enabled = config.ENABLE_WEB_INSIGHTS ?? true;
     this.cnpjLookupEnabled = config.ENABLE_CNPJ_LOOKUP ?? true;
-    this.googleSearchEnabled = (config.ENABLE_GOOGLE_SEARCH ?? true) && this.googleSearchService.isEnabled();
+    this.googleSearchEnabled =
+      (config.ENABLE_GOOGLE_SEARCH ?? true) &&
+      this.googleSearchService.isEnabled();
   }
 
   /**
@@ -91,7 +101,7 @@ export class WebInsightService {
         generated: false,
         insightCount: 0,
         messageSent: false,
-        error: 'Web insights disabled',
+        error: "Web insights disabled",
       };
     }
 
@@ -118,7 +128,7 @@ export class WebInsightService {
       if (insights.length === 0) {
         enrichmentLogger.debug(
           { leadId: data.leadId },
-          'No insights generated for lead'
+          "No insights generated for lead",
         );
         return {
           generated: false,
@@ -129,13 +139,13 @@ export class WebInsightService {
 
       // Filtrar por confiança mínima
       const qualifiedInsights = insights.filter(
-        (i) => i.confidence >= this.minConfidence
+        (i) => i.confidence >= this.minConfidence,
       );
 
       if (qualifiedInsights.length === 0) {
         enrichmentLogger.debug(
           { leadId: data.leadId, totalInsights: insights.length },
-          'No insights meet confidence threshold'
+          "No insights meet confidence threshold",
         );
         return {
           generated: true,
@@ -162,7 +172,7 @@ export class WebInsightService {
         hasRareSurname: surnameAnalyses.some((s) => s.isRare),
         isNotableFamily: surnameAnalyses.some((s) => s.isNotableFamily),
         hasFamilyConnection:
-          familyConnection !== null && familyConnection.type !== 'none',
+          familyConnection !== null && familyConnection.type !== "none",
         isInternational: internationalCheck.isInternational,
         income: data.income,
         propertyCount: data.propertyCount,
@@ -174,7 +184,7 @@ export class WebInsightService {
         enrichedName: data.enrichedName,
         income: data.income,
         propertyCount: data.propertyCount,
-        addressCount: data.addressCount,
+        addresses: data.addresses,
         phone: data.phone,
         tier: scoreResult.tier,
       };
@@ -191,7 +201,7 @@ export class WebInsightService {
             insightCount: qualifiedInsights.length,
             tier: scoreResult.tier,
           },
-          'Insight message sent to C2S'
+          "Insight message sent to C2S",
         );
 
         return {
@@ -204,7 +214,7 @@ export class WebInsightService {
       } catch (error) {
         enrichmentLogger.error(
           { leadId: data.leadId, error },
-          'Failed to send insight message to C2S'
+          "Failed to send insight message to C2S",
         );
 
         return {
@@ -213,20 +223,20 @@ export class WebInsightService {
           messageSent: false,
           tier: scoreResult.tier,
           insights: qualifiedInsights,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error instanceof Error ? error.message : "Unknown error",
         };
       }
     } catch (error) {
       enrichmentLogger.error(
         { leadId: data.leadId, error },
-        'Failed to generate insights'
+        "Failed to generate insights",
       );
 
       return {
         generated: false,
         insightCount: 0,
         messageSent: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }
@@ -239,13 +249,17 @@ export class WebInsightService {
 
     // 1. Análise de nome concatenado (ex: "Martarabello")
     const concatenatedCheck = detectConcatenatedName(data.leadName);
-    if (concatenatedCheck.detected && concatenatedCheck.firstName && concatenatedCheck.lastName) {
+    if (
+      concatenatedCheck.detected &&
+      concatenatedCheck.firstName &&
+      concatenatedCheck.lastName
+    ) {
       insights.push(
         createConcatenatedNameInsight(
           data.leadName,
           concatenatedCheck.firstName,
-          concatenatedCheck.lastName
-        )
+          concatenatedCheck.lastName,
+        ),
       );
     }
 
@@ -253,17 +267,17 @@ export class WebInsightService {
     if (data.enrichedName && data.enrichedName !== data.leadName) {
       const familyConnection = detectFamilyConnection(
         data.leadName,
-        data.enrichedName
+        data.enrichedName,
       );
 
-      if (familyConnection.type !== 'none' && familyConnection.sharedSurname) {
-        let relationshipText = 'Familiar';
-        if (familyConnection.type === 'spouse') {
-          relationshipText = 'Provável cônjuge';
-        } else if (familyConnection.type === 'sibling') {
-          relationshipText = 'Possível irmão(ã)';
-        } else if (familyConnection.type === 'parent_child') {
-          relationshipText = 'Possível pai/mãe ou filho(a)';
+      if (familyConnection.type !== "none" && familyConnection.sharedSurname) {
+        let relationshipText = "Familiar";
+        if (familyConnection.type === "spouse") {
+          relationshipText = "Provável cônjuge";
+        } else if (familyConnection.type === "sibling") {
+          relationshipText = "Possível irmão(ã)";
+        } else if (familyConnection.type === "parent_child") {
+          relationshipText = "Possível pai/mãe ou filho(a)";
         }
 
         insights.push(
@@ -271,8 +285,8 @@ export class WebInsightService {
             data.leadName,
             data.enrichedName,
             relationshipText,
-            familyConnection.sharedSurname
-          )
+            familyConnection.sharedSurname,
+          ),
         );
       }
     }
@@ -284,13 +298,17 @@ export class WebInsightService {
     for (const surname of surnames) {
       const analysis = analyzeSurname(surname);
 
-      if (analysis.isNotableFamily && analysis.familyContext && analysis.relatedPeople) {
+      if (
+        analysis.isNotableFamily &&
+        analysis.familyContext &&
+        analysis.relatedPeople
+      ) {
         insights.push(
           createNotableFamilyInsight(
             surname,
             analysis.familyContext,
-            analysis.relatedPeople
-          )
+            analysis.relatedPeople,
+          ),
         );
       } else if (analysis.isRare && analysis.confidence >= 70) {
         insights.push(createRareSurnameInsight(surname));
@@ -307,7 +325,7 @@ export class WebInsightService {
       const internationalCheck = isInternationalPhone(data.phone);
       if (internationalCheck.isInternational && internationalCheck.country) {
         insights.push(
-          createInternationalInsight(internationalCheck.country, data.phone)
+          createInternationalInsight(internationalCheck.country, data.phone),
         );
       }
     }
@@ -352,7 +370,10 @@ export class WebInsightService {
     const surnames = extractSurnames(nameToCheck);
     for (const surname of surnames) {
       const analysis = analyzeSurname(surname);
-      if (analysis.isNotableFamily || (analysis.isRare && analysis.confidence >= 70)) {
+      if (
+        analysis.isNotableFamily ||
+        (analysis.isRare && analysis.confidence >= 70)
+      ) {
         return true;
       }
     }
@@ -370,34 +391,37 @@ export class WebInsightService {
    * Busca perfil empresarial via CNPJ lookup
    * Procura empresas onde a pessoa é sócia/administradora
    */
-  private async searchBusinessProfile(data: LeadInsightData): Promise<LeadInsight | null> {
+  private async searchBusinessProfile(
+    data: LeadInsightData,
+  ): Promise<LeadInsight | null> {
     const nameToSearch = data.enrichedName || data.leadName;
 
     try {
       enrichmentLogger.debug(
         { leadId: data.leadId, name: nameToSearch },
-        'Searching business profile via CNPJ'
+        "Searching business profile via CNPJ",
       );
 
-      const result = await this.cnpjLookupService.searchCompaniesByName(nameToSearch);
+      const result =
+        await this.cnpjLookupService.searchCompaniesByName(nameToSearch);
 
       if (!result.success || result.companies.length === 0) {
         enrichmentLogger.debug(
           { leadId: data.leadId, name: nameToSearch },
-          'No companies found for lead'
+          "No companies found for lead",
         );
         return null;
       }
 
       // Filtrar apenas empresas ativas
       const activeCompanies = result.companies.filter(
-        (c) => c.situacao?.toUpperCase() === 'ATIVA'
+        (c) => c.situacao?.toUpperCase() === "ATIVA",
       );
 
       if (activeCompanies.length === 0) {
         enrichmentLogger.debug(
           { leadId: data.leadId, totalCompanies: result.companies.length },
-          'No active companies found'
+          "No active companies found",
         );
         return null;
       }
@@ -416,14 +440,14 @@ export class WebInsightService {
           companiesFound: activeCompanies.length,
           source: result.source,
         },
-        'Business profile found'
+        "Business profile found",
       );
 
       return createBusinessOwnerInsight(nameToSearch, companiesForInsight);
     } catch (error) {
       enrichmentLogger.error(
         { leadId: data.leadId, name: nameToSearch, error },
-        'Failed to search business profile'
+        "Failed to search business profile",
       );
       return null;
     }
@@ -432,13 +456,17 @@ export class WebInsightService {
   /**
    * Encontra o papel da pessoa na empresa
    */
-  private findRole(company: CompanyInfo, personName: string): string | undefined {
+  private findRole(
+    company: CompanyInfo,
+    personName: string,
+  ): string | undefined {
     if (!company.socios) return undefined;
 
     const normalizedName = personName.toUpperCase();
-    const socio = company.socios.find((s) =>
-      s.nome?.toUpperCase().includes(normalizedName) ||
-      normalizedName.includes(s.nome?.toUpperCase() || '')
+    const socio = company.socios.find(
+      (s) =>
+        s.nome?.toUpperCase().includes(normalizedName) ||
+        normalizedName.includes(s.nome?.toUpperCase() || ""),
     );
 
     return socio?.qualificacao;
@@ -448,28 +476,37 @@ export class WebInsightService {
    * Busca perfil web via Google Search
    * Procura LinkedIn, notícias, menções legais
    */
-  private async searchWebProfile(data: LeadInsightData): Promise<LeadInsight | null> {
+  private async searchWebProfile(
+    data: LeadInsightData,
+  ): Promise<LeadInsight | null> {
     const nameToSearch = data.enrichedName || data.leadName;
 
     try {
       enrichmentLogger.debug(
-        { leadId: data.leadId, name: nameToSearch, quota: this.googleSearchService.getRemainingQuota() },
-        'Searching web profile via Google'
+        {
+          leadId: data.leadId,
+          name: nameToSearch,
+          quota: this.googleSearchService.getRemainingQuota(),
+        },
+        "Searching web profile via Google",
       );
 
-      const personInsights = await this.googleSearchService.searchPerson(nameToSearch);
+      const personInsights =
+        await this.googleSearchService.searchPerson(nameToSearch);
 
       // Verifica se encontrou algo relevante
       const hasRelevantData =
         personInsights.linkedinProfile ||
         (personInsights.companies && personInsights.companies.length > 0) ||
-        (personInsights.newsArticles && personInsights.newsArticles.length > 0) ||
-        (personInsights.legalMentions && personInsights.legalMentions.length > 0);
+        (personInsights.newsArticles &&
+          personInsights.newsArticles.length > 0) ||
+        (personInsights.legalMentions &&
+          personInsights.legalMentions.length > 0);
 
       if (!hasRelevantData) {
         enrichmentLogger.debug(
           { leadId: data.leadId, name: nameToSearch },
-          'No relevant web profile found'
+          "No relevant web profile found",
         );
         return null;
       }
@@ -482,7 +519,7 @@ export class WebInsightService {
           companiesFound: personInsights.companies?.length || 0,
           newsFound: personInsights.newsArticles?.length || 0,
         },
-        'Web profile found'
+        "Web profile found",
       );
 
       return createWebSearchInsight(
@@ -490,12 +527,12 @@ export class WebInsightService {
         personInsights.companies,
         personInsights.newsArticles,
         personInsights.legalMentions,
-        personInsights.summary
+        personInsights.summary,
       );
     } catch (error) {
       enrichmentLogger.error(
         { leadId: data.leadId, name: nameToSearch, error },
-        'Failed to search web profile'
+        "Failed to search web profile",
       );
       return null;
     }

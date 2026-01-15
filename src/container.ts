@@ -9,6 +9,7 @@ import { DbStorageService } from "./services/db-storage.service";
 import { IbviPropertyService } from "./services/ibvi-property.service";
 import { WebInsightService } from "./services/web-insight.service";
 import { PrometheusService } from "./services/prometheus.service";
+import { LeadAnalysisService } from "./services/lead-analysis.service";
 
 /**
  * Simple dependency injection container
@@ -26,6 +27,7 @@ class ServiceContainer {
   private _ibviProperty?: IbviPropertyService;
   private _webInsight?: WebInsightService;
   private _prometheus?: PrometheusService;
+  private _leadAnalysis?: LeadAnalysisService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -104,6 +106,13 @@ class ServiceContainer {
     return this._prometheus;
   }
 
+  get leadAnalysis(): LeadAnalysisService {
+    if (!this._leadAnalysis) {
+      this._leadAnalysis = new LeadAnalysisService();
+    }
+    return this._leadAnalysis;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -117,6 +126,7 @@ class ServiceContainer {
     this._ibviProperty = undefined;
     this._webInsight = undefined;
     this._prometheus = undefined;
+    this._leadAnalysis = undefined;
   }
 }
 

@@ -34,6 +34,10 @@ import type { NewParty, NewPartyContact, NewAddress } from "../db/schema";
 import { container } from "../container";
 import { detectHighValueLead } from "../utils/high-value-detector";
 import { alertService } from "./alert.service";
+import type {
+  LeadAnalysisService,
+  LeadAnalysisResult,
+} from "./lead-analysis.service";
 
 export interface LeadData {
   leadId: string;
@@ -74,6 +78,7 @@ export class EnrichmentService {
   private webInsightService: WebInsightService;
   private incomeMultiplier: number;
   private enableWebInsights: boolean;
+  private enableLeadAnalysis: boolean;
 
   constructor() {
     this.workApiService = new WorkApiService();
@@ -85,6 +90,7 @@ export class EnrichmentService {
     const config = getConfig();
     this.incomeMultiplier = config.INCOME_MULTIPLIER;
     this.enableWebInsights = config.ENABLE_WEB_INSIGHTS ?? true;
+    this.enableLeadAnalysis = config.ENABLE_LEAD_ANALYSIS ?? true;
   }
 
   async enrichLead(lead: LeadData): Promise<EnrichmentResult> {
@@ -211,12 +217,13 @@ export class EnrichmentService {
       // Mark CPF as recently processed
       recentCpfCache.set(cpf, true);
 
-      // Update lead status
+      // Update lead status with contact data
       await this.dbStorage.updateLeadEnrichmentStatus(
         leadId,
         "completed",
         party.id,
         c2sResult.data.id,
+        { name, phone, email, campaignName },
       );
 
       enrichmentLogger.info(
@@ -228,7 +235,7 @@ export class EnrichmentService {
       const durationSeconds = (Date.now() - startTime) / 1000;
       container.prometheus.recordEnrichment("completed", durationSeconds);
 
-      // Generate and send insights (async, doesn't block response)
+      // Generate insights message (cleaned up version - no duplicates)
       if (this.enableWebInsights) {
         this.generateInsightsAsync(
           leadId,
@@ -250,6 +257,18 @@ export class EnrichmentService {
         email,
         c2sResult.data.id,
       );
+
+      // Run deep lead analysis (RML-872)
+      if (this.enableLeadAnalysis) {
+        this.runDeepAnalysisAsync(
+          leadId,
+          name,
+          email,
+          phone,
+          personData,
+          propertyData,
+        );
+      }
 
       return {
         success: true,
@@ -405,6 +424,42 @@ export class EnrichmentService {
   private async createUnenrichedCustomer(
     lead: LeadData,
   ): Promise<EnrichmentResult> {
+    // RML-811: Skip sending message if name is "Unknown" or empty
+    // This prevents duplicate "Nome: Unknown" messages in C2S
+    const normalizedName = normalizeName(lead.name);
+    const isUnknownName =
+      !normalizedName ||
+      normalizedName.toLowerCase() === "unknown" ||
+      normalizedName.toLowerCase() === "desconhecido";
+
+    if (isUnknownName) {
+      enrichmentLogger.info(
+        { leadId: lead.leadId, name: lead.name },
+        "Skipping unenriched message - name is Unknown/empty",
+      );
+
+      // Still update status but don't send message - save contact data
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "unenriched",
+        undefined,
+        lead.leadId,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
+      );
+
+      return {
+        success: true,
+        c2sCustomerId: lead.leadId,
+        enriched: false,
+        message: "Skipped message - name is Unknown (CPF not found)",
+      };
+    }
+
     const description = buildSimpleDescription(
       lead.name,
       lead.phone,
@@ -421,6 +476,12 @@ export class EnrichmentService {
         "unenriched",
         undefined,
         lead.leadId,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       return {
@@ -432,7 +493,7 @@ export class EnrichmentService {
     } catch {
       // If message fails, try creating new lead
       const leadData: C2SLeadCreate = {
-        customer: normalizeName(lead.name) || lead.name,
+        customer: normalizedName || lead.name,
         phone: lead.phone ? formatPhoneWithCountryCode(lead.phone) : undefined,
         email: lead.email
           ? (normalizeEmail(lead.email) ?? undefined)
@@ -449,6 +510,12 @@ export class EnrichmentService {
         "unenriched",
         undefined,
         result.data.id,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       return {
@@ -466,6 +533,44 @@ export class EnrichmentService {
     propertyData: PropertySummary | null,
     nameMismatchWarning: string = "",
   ): Promise<EnrichmentResult> {
+    // RML-811: Skip sending message if name is "Unknown" or empty
+    const normalizedName = normalizeName(lead.name);
+    const isUnknownName =
+      !normalizedName ||
+      normalizedName.toLowerCase() === "unknown" ||
+      normalizedName.toLowerCase() === "desconhecido";
+
+    if (isUnknownName) {
+      enrichmentLogger.info(
+        { leadId: lead.leadId, cpf, name: lead.name },
+        "Skipping basic message - name is Unknown/empty",
+      );
+
+      recentCpfCache.set(cpf, true);
+
+      await this.dbStorage.updateLeadEnrichmentStatus(
+        lead.leadId,
+        "basic",
+        undefined,
+        lead.leadId,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
+      );
+
+      return {
+        success: true,
+        cpf,
+        c2sCustomerId: lead.leadId,
+        enriched: false,
+        message:
+          "Skipped message - name is Unknown (CPF found but no Work API data)",
+      };
+    }
+
     let description =
       nameMismatchWarning +
       buildSimpleDescription(
@@ -496,6 +601,12 @@ export class EnrichmentService {
         "basic",
         undefined,
         lead.leadId,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       return {
@@ -528,6 +639,12 @@ export class EnrichmentService {
         "basic",
         undefined,
         result.data.id,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       return {
@@ -585,6 +702,12 @@ export class EnrichmentService {
         "partial",
         undefined,
         lead.leadId,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       return {
@@ -621,6 +744,12 @@ export class EnrichmentService {
         "partial",
         undefined,
         result.data.id,
+        {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          campaignName: lead.campaignName,
+        },
       );
 
       enrichmentLogger.info(
@@ -662,12 +791,22 @@ export class EnrichmentService {
           phone,
           email,
           cpf: personData.cpf,
-          income: normalizeIncome(personData.renda, this.incomeMultiplier) ?? undefined,
+          income:
+            normalizeIncome(personData.renda, this.incomeMultiplier) ??
+            undefined,
           presumedIncome: personData.rendaPresumida
-            ? normalizeIncome(personData.rendaPresumida, this.incomeMultiplier) ?? undefined
+            ? (normalizeIncome(
+                personData.rendaPresumida,
+                this.incomeMultiplier,
+              ) ?? undefined)
             : undefined,
           propertyCount: propertyData?.totalProperties ?? 0,
-          addressCount: personData.enderecos?.length ?? 0,
+          addresses: personData.enderecos?.map((e) => ({
+            street: e.logradouro,
+            neighborhood: e.bairro,
+            city: e.cidade,
+            state: e.uf,
+          })),
           campaignName,
         };
 
@@ -681,7 +820,8 @@ export class EnrichmentService {
         }
 
         // Generate and send insights
-        const result = await this.webInsightService.generateAndSendInsights(insightData);
+        const result =
+          await this.webInsightService.generateAndSendInsights(insightData);
 
         if (result.messageSent) {
           enrichmentLogger.info(
@@ -726,9 +866,14 @@ export class EnrichmentService {
         }));
 
         const result = detectHighValueLead({
-          income: normalizeIncome(personData.renda, this.incomeMultiplier) ?? undefined,
+          income:
+            normalizeIncome(personData.renda, this.incomeMultiplier) ??
+            undefined,
           presumedIncome: personData.rendaPresumida
-            ? normalizeIncome(personData.rendaPresumida, this.incomeMultiplier) ?? undefined
+            ? (normalizeIncome(
+                personData.rendaPresumida,
+                this.incomeMultiplier,
+              ) ?? undefined)
             : undefined,
           addresses,
           leadName,
@@ -736,9 +881,16 @@ export class EnrichmentService {
           // companyCount would come from CNPJ lookup - future enhancement
         });
 
+        // Only alert for truly high-value leads (Gold+ tier, score >= 50)
         if (result.isHighValue) {
           enrichmentLogger.info(
-            { leadId, reasons: result.reasons, details: result.details },
+            {
+              leadId,
+              tier: result.tier,
+              score: result.score,
+              reasons: result.reasons,
+              details: result.details,
+            },
             "High-value lead detected!",
           );
 
@@ -759,13 +911,109 @@ export class EnrichmentService {
             companies: result.details.companies,
             familyName: result.details.familyName,
             reasons: result.reasons,
+            tier: result.tier,
+            score: result.score,
             c2sUrl,
           });
+        } else if (result.tier === "silver") {
+          // Log silver leads but don't alert
+          enrichmentLogger.debug(
+            {
+              leadId,
+              tier: result.tier,
+              score: result.score,
+              reasons: result.reasons,
+            },
+            "Potential lead detected (silver tier - no alert)",
+          );
         }
       } catch (error) {
         enrichmentLogger.error(
           { leadId, error },
           "Failed to check high-value lead (non-blocking)",
+        );
+      }
+    })();
+  }
+
+  /**
+   * Run deep lead analysis asynchronously (RML-872)
+   * Performs web searches, domain analysis, risk detection, and tier calculation
+   * Runs in background - doesn't block enrichment response
+   */
+  private runDeepAnalysisAsync(
+    leadId: string,
+    name: string,
+    email?: string,
+    phone?: string,
+    personData?: WorkApiPerson,
+    propertyData?: PropertySummary | null,
+  ): void {
+    // Run async without blocking
+    (async () => {
+      try {
+        const leadAnalysisService = container.leadAnalysis;
+
+        // Build enrichment data for analysis
+        const enrichmentData = personData
+          ? {
+              income:
+                normalizeIncome(personData.renda, this.incomeMultiplier) ??
+                undefined,
+              addresses: personData.enderecos?.map((addr) => ({
+                neighborhood: addr.bairro,
+                city: addr.cidade,
+                state: addr.uf,
+              })),
+              propertyCount: propertyData?.totalProperties ?? 0,
+              cpf: personData.cpf,
+            }
+          : undefined;
+
+        const analysisResult = await leadAnalysisService.analyze({
+          leadId,
+          name,
+          email,
+          phone,
+          enrichmentData,
+        });
+
+        enrichmentLogger.info(
+          {
+            leadId,
+            tier: analysisResult.tier,
+            score: analysisResult.score,
+            durationMs: analysisResult.durationMs,
+            alertsCount: analysisResult.alerts.length,
+          },
+          "Deep lead analysis completed",
+        );
+
+        // Check if we should send alerts
+        const alertCheck = leadAnalysisService.shouldAlert(analysisResult);
+        if (alertCheck.shouldAlert) {
+          if (alertCheck.type === "risk") {
+            // Send risk alert
+            await alertService.sendAlert("lead_risk_detected", {
+              leadId,
+              name,
+              tier: analysisResult.tier,
+              score: analysisResult.score,
+              alerts: analysisResult.alerts,
+              recommendation: analysisResult.recommendation.title,
+            });
+          } else if (alertCheck.type === "premium") {
+            // Send premium lead alert (complement to high-value detection)
+            enrichmentLogger.info(
+              { leadId, tier: analysisResult.tier },
+              "Premium lead detected via deep analysis",
+            );
+          }
+        }
+      } catch (error) {
+        enrichmentLogger.error(
+          { leadId, error },
+          "Failed to run deep lead analysis (non-blocking)",
         );
       }
     })();

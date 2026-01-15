@@ -46,10 +46,10 @@ export interface CronJobConfig {
 
 // Smart interval settings (RML-809)
 const SMART_INTERVALS = {
-  businessHours: 5 * 60 * 1000,   // 5 minutes (09:00-19:00)
-  evening: 20 * 60 * 1000,        // 20 minutes (19:00-23:30)
-  night: 60 * 60 * 1000,          // 60 minutes (23:30-06:00)
-  earlyMorning: 20 * 60 * 1000,   // 20 minutes (06:00-09:00)
+  businessHours: 5 * 60 * 1000, // 5 minutes (09:00-19:00)
+  evening: 20 * 60 * 1000, // 20 minutes (19:00-23:30)
+  night: 60 * 60 * 1000, // 60 minutes (23:30-06:00)
+  earlyMorning: 20 * 60 * 1000, // 20 minutes (06:00-09:00)
 };
 
 let smartCronTimer: ReturnType<typeof setTimeout> | null = null;
@@ -62,7 +62,9 @@ let isStopped = false;
 function getSmartInterval(): { intervalMs: number; period: string } {
   // Get current time in São Paulo
   const now = new Date();
-  const spTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const spTime = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }),
+  );
   const hours = spTime.getHours();
   const minutes = spTime.getMinutes();
   const timeInMinutes = hours * 60 + minutes;
@@ -96,19 +98,41 @@ const RETRY_DELAYS_MS = [
 ];
 
 /**
+ * Check if a lead name is valid for retry (not Unknown/empty)
+ * RML-811: Prevent duplicate "Nome: Unknown" messages
+ */
+function isValidNameForRetry(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const normalized = name.trim().toLowerCase();
+  return (
+    normalized !== "unknown" &&
+    normalized !== "desconhecido" &&
+    normalized.length > 0
+  );
+}
+
+/**
  * Process retry-eligible leads (RML-639)
+ * RML-811: Skip leads with Unknown name to prevent duplicate messages
  */
 async function processRetries(config: CronJobConfig): Promise<{
   processed: number;
   succeeded: number;
   failed: number;
   maxRetriesReached: number;
+  skippedUnknown: number;
 }> {
   const appConfig = getConfig();
   const maxRetries = appConfig.RETRY_MAX_ATTEMPTS;
 
   if (!appConfig.RETRY_ENABLED) {
-    return { processed: 0, succeeded: 0, failed: 0, maxRetriesReached: 0 };
+    return {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      maxRetriesReached: 0,
+      skippedUnknown: 0,
+    };
   }
 
   // Get leads eligible for retry
@@ -118,7 +142,13 @@ async function processRetries(config: CronJobConfig): Promise<{
   );
 
   if (retryableLeads.length === 0) {
-    return { processed: 0, succeeded: 0, failed: 0, maxRetriesReached: 0 };
+    return {
+      processed: 0,
+      succeeded: 0,
+      failed: 0,
+      maxRetriesReached: 0,
+      skippedUnknown: 0,
+    };
   }
 
   cronLogger.info(
@@ -129,12 +159,30 @@ async function processRetries(config: CronJobConfig): Promise<{
   let succeeded = 0;
   let failed = 0;
   let maxRetriesReached = 0;
+  let skippedUnknown = 0;
 
   for (const lead of retryableLeads) {
+    // RML-811: Skip leads with Unknown name - they will never enrich successfully
+    // and we don't want to send duplicate "Nome: Unknown" messages
+    if (!isValidNameForRetry(lead.name)) {
+      cronLogger.info(
+        { leadId: lead.leadId, name: lead.name },
+        "Skipping retry - lead has Unknown/empty name",
+      );
+
+      // Mark as failed to stop future retry attempts
+      await container.dbStorage.markLeadFailed(
+        lead.leadId,
+        "Nome Unknown - não é possível enriquecer sem nome válido",
+      );
+      skippedUnknown++;
+      continue;
+    }
+
     try {
       const result = await container.enrichment.enrichLead({
         leadId: lead.leadId,
-        name: lead.name || "Unknown",
+        name: lead.name!, // Safe - we validated above
         phone: lead.phone ?? undefined,
         email: lead.email ?? undefined,
         source: "retry",
@@ -221,6 +269,7 @@ async function processRetries(config: CronJobConfig): Promise<{
     succeeded,
     failed,
     maxRetriesReached,
+    skippedUnknown,
   };
 }
 
@@ -325,15 +374,16 @@ async function runEnrichmentCycle(config: CronJobConfig): Promise<void> {
       "New leads enrichment completed",
     );
 
-    // Process retries (RML-639)
+    // Process retries (RML-639, RML-811)
     const retryResults = await processRetries(config);
-    if (retryResults.processed > 0) {
+    if (retryResults.processed > 0 || retryResults.skippedUnknown > 0) {
       cronLogger.info(
         {
           retryProcessed: retryResults.processed,
           retrySucceeded: retryResults.succeeded,
           retryFailed: retryResults.failed,
           maxRetriesReached: retryResults.maxRetriesReached,
+          skippedUnknownName: retryResults.skippedUnknown,
         },
         "Retry processing completed",
       );

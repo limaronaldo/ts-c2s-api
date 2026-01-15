@@ -16,6 +16,14 @@ export class DbStorageService {
     return getDb();
   }
 
+  /**
+   * Get database instance for direct queries
+   * Used by services that need raw DB access
+   */
+  getDb() {
+    return getDb();
+  }
+
   // Party operations
   async findPartyByCpf(cpf: string): Promise<Party | null> {
     const normalized = normalizeCpf(cpf);
@@ -150,17 +158,24 @@ export class DbStorageService {
    * Upsert lead enrichment status
    * Creates the lead record if it doesn't exist (for leads fetched from C2S API)
    * Updates the status if it already exists
+   * Now also saves contact data (name, phone, email) for analysis
    */
   async updateLeadEnrichmentStatus(
     leadId: string,
     status: string,
     partyId?: string,
     c2sCustomerId?: string,
+    contactData?: {
+      name?: string;
+      phone?: string;
+      email?: string;
+      campaignName?: string;
+    },
   ): Promise<void> {
     const existing = await this.findLeadByLeadId(leadId);
 
     if (existing) {
-      // Update existing lead
+      // Update existing lead - only update contact data if provided and not already set
       await this.db
         .update(schema.googleAdsLeads)
         .set({
@@ -168,6 +183,19 @@ export class DbStorageService {
           partyId,
           c2sCustomerId,
           enrichedAt: status === "completed" ? new Date() : undefined,
+          // Update contact data only if provided
+          ...(contactData?.name && !existing.name
+            ? { name: contactData.name }
+            : {}),
+          ...(contactData?.phone && !existing.phone
+            ? { phone: contactData.phone }
+            : {}),
+          ...(contactData?.email && !existing.email
+            ? { email: contactData.email }
+            : {}),
+          ...(contactData?.campaignName && !existing.campaignName
+            ? { campaignName: contactData.campaignName }
+            : {}),
         })
         .where(eq(schema.googleAdsLeads.leadId, leadId));
     } else {
@@ -178,8 +206,15 @@ export class DbStorageService {
         partyId,
         c2sCustomerId,
         enrichedAt: status === "completed" ? new Date() : undefined,
+        name: contactData?.name,
+        phone: contactData?.phone,
+        email: contactData?.email,
+        campaignName: contactData?.campaignName,
       });
-      dbLogger.info({ leadId, status }, "Created new lead record for C2S lead");
+      dbLogger.info(
+        { leadId, status, name: contactData?.name },
+        "Created new lead record for C2S lead",
+      );
     }
   }
 
@@ -316,14 +351,21 @@ export class DbStorageService {
    * @param dateFrom - Optional start date filter
    * @param dateTo - Optional end date filter
    */
-  async getLeadStats(dateFrom?: Date, dateTo?: Date): Promise<Record<string, number>> {
+  async getLeadStats(
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): Promise<Record<string, number>> {
     const conditions = [];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`,
+      );
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`,
+      );
     }
 
     const query = this.db
@@ -333,9 +375,12 @@ export class DbStorageService {
       })
       .from(schema.googleAdsLeads);
 
-    const results = conditions.length > 0
-      ? await query.where(and(...conditions)).groupBy(schema.googleAdsLeads.enrichmentStatus)
-      : await query.groupBy(schema.googleAdsLeads.enrichmentStatus);
+    const results =
+      conditions.length > 0
+        ? await query
+            .where(and(...conditions))
+            .groupBy(schema.googleAdsLeads.enrichmentStatus)
+        : await query.groupBy(schema.googleAdsLeads.enrichmentStatus);
 
     const stats: Record<string, number> = {};
     for (const row of results) {
@@ -358,15 +403,17 @@ export class DbStorageService {
     const conditions = [];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`,
+      );
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`,
+      );
     }
 
-    const query = this.db
-      .select()
-      .from(schema.googleAdsLeads);
+    const query = this.db.select().from(schema.googleAdsLeads);
 
     if (conditions.length > 0) {
       return query
@@ -375,9 +422,7 @@ export class DbStorageService {
         .limit(limit);
     }
 
-    return query
-      .orderBy(desc(schema.googleAdsLeads.createdAt))
-      .limit(limit);
+    return query.orderBy(desc(schema.googleAdsLeads.createdAt)).limit(limit);
   }
 
   /**
@@ -394,10 +439,14 @@ export class DbStorageService {
     const conditions = [eq(schema.googleAdsLeads.enrichmentStatus, "failed")];
 
     if (dateFrom) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} >= ${dateFrom.toISOString()}`,
+      );
     }
     if (dateTo) {
-      conditions.push(sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`);
+      conditions.push(
+        sql`${schema.googleAdsLeads.createdAt} <= ${dateTo.toISOString()}`,
+      );
     }
 
     return this.db
@@ -406,5 +455,46 @@ export class DbStorageService {
       .where(and(...conditions))
       .orderBy(desc(schema.googleAdsLeads.lastRetryAt))
       .limit(limit);
+  }
+
+  /**
+   * Get leads that need reprocessing (status is null, unenriched, basic, or partial)
+   * Used for manual reprocessing via dashboard
+   */
+  async getLeadsForReprocessing(
+    limit: number = 50,
+  ): Promise<(typeof schema.googleAdsLeads.$inferSelect)[]> {
+    const reprocessStatuses = ["unenriched", "basic", "partial"];
+
+    return this.db
+      .select()
+      .from(schema.googleAdsLeads)
+      .where(
+        or(
+          isNull(schema.googleAdsLeads.enrichmentStatus),
+          inArray(schema.googleAdsLeads.enrichmentStatus, reprocessStatuses),
+        ),
+      )
+      .orderBy(desc(schema.googleAdsLeads.createdAt))
+      .limit(limit);
+  }
+
+  /**
+   * Reset lead status for reprocessing
+   */
+  async resetLeadForReprocessing(leadId: string): Promise<void> {
+    await this.db
+      .update(schema.googleAdsLeads)
+      .set({
+        enrichmentStatus: null,
+        retryCount: 0,
+        lastRetryAt: null,
+        lastError: null,
+        partyId: null,
+        enrichedAt: null,
+      })
+      .where(eq(schema.googleAdsLeads.leadId, leadId));
+
+    dbLogger.info({ leadId }, "Reset lead for reprocessing");
   }
 }

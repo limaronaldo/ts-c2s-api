@@ -158,6 +158,57 @@ export const googleAdsLeads = analyticsSchema.table(
   }),
 );
 
+// Lead analyses table (RML-872)
+// Stores deep analysis results for leads including web search findings and tier scoring
+export const leadAnalyses = analyticsSchema.table(
+  "lead_analyses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    leadId: varchar("lead_id", { length: 255 }).notNull(),
+
+    // Tier classification
+    tier: varchar("tier", { length: 20 }).notNull(), // platinum, gold, silver, bronze, risk
+    tierScore: integer("tier_score").notNull(), // 0-100
+
+    // Discovered information
+    discoveredFullName: varchar("discovered_full_name", { length: 255 }),
+    discoveredCompany: varchar("discovered_company", { length: 255 }),
+    discoveredRole: varchar("discovered_role", { length: 255 }),
+    discoveredEducation: varchar("discovered_education", { length: 255 }),
+    discoveredLinkedin: varchar("discovered_linkedin", { length: 500 }),
+    discoveredInstagram: varchar("discovered_instagram", { length: 255 }),
+    discoveredOrigin: varchar("discovered_origin", { length: 255 }),
+    discoveredWealthEstimate: varchar("discovered_wealth_estimate", {
+      length: 100,
+    }),
+
+    // JSON arrays for complex data
+    portfolio: jsonb("portfolio"), // [{company: string, sector: string}]
+    assets: jsonb("assets"), // [{name: string, value: string}]
+    alerts: jsonb("alerts"), // string[]
+    highlights: jsonb("highlights"), // string[]
+    sources: jsonb("sources"), // string[] - URLs/references used
+
+    // Recommendation
+    recommendationAction: varchar("recommendation_action", { length: 20 }), // avoid, priority, qualify, contact
+    recommendationTitle: varchar("recommendation_title", { length: 100 }),
+    recommendationDescription: text("recommendation_description"),
+
+    // Analysis metadata
+    analysisDurationMs: integer("analysis_duration_ms"),
+    analysisVersion: varchar("analysis_version", { length: 20 }).default("1.0"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    leadIdIdx: index("idx_lead_analyses_lead_id").on(table.leadId),
+    tierIdx: index("idx_lead_analyses_tier").on(table.tier),
+    tierScoreIdx: index("idx_lead_analyses_tier_score").on(table.tierScore),
+    createdAtIdx: index("idx_lead_analyses_created_at").on(table.createdAt),
+  }),
+);
+
 // Type exports
 export type Party = typeof parties.$inferSelect;
 export type NewParty = typeof parties.$inferInsert;
@@ -169,3 +220,5 @@ export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
 export type GoogleAdsLead = typeof googleAdsLeads.$inferSelect;
 export type NewGoogleAdsLead = typeof googleAdsLeads.$inferInsert;
+export type LeadAnalysis = typeof leadAnalyses.$inferSelect;
+export type NewLeadAnalysis = typeof leadAnalyses.$inferInsert;

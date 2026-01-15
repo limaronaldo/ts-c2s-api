@@ -15,7 +15,12 @@ import { emailService } from "./email.service";
 
 const alertLogger = logger.child({ module: "alerts" });
 
-export type AlertType = "lead_max_retries" | "high_error_rate" | "service_down" | "high_value_lead";
+export type AlertType =
+  | "lead_max_retries"
+  | "high_error_rate"
+  | "service_down"
+  | "high_value_lead"
+  | "lead_risk_detected";
 
 export type AlertSeverity = "warning" | "critical";
 
@@ -65,7 +70,9 @@ export class AlertService {
         "Alert service initialized with webhook",
       );
     } else {
-      alertLogger.info("Alert service initialized without webhook (alerts disabled)");
+      alertLogger.info(
+        "Alert service initialized without webhook (alerts disabled)",
+      );
     }
   }
 
@@ -252,7 +259,7 @@ export class AlertService {
   }
 
   /**
-   * Send alert for high-value lead (RML-810)
+   * Send alert for high-value lead (RML-810, improved Jan 15 2026)
    */
   async alertHighValueLead(details: {
     leadId: string;
@@ -264,6 +271,8 @@ export class AlertService {
     companies?: number;
     familyName?: string;
     reasons: string[];
+    tier?: "platinum" | "gold" | "silver" | "none";
+    score?: number;
     c2sUrl?: string;
   }): Promise<void> {
     await this.sendAlert("high_value_lead", details);
@@ -302,6 +311,8 @@ export class AlertService {
         return "critical";
       case "high_value_lead":
         return "critical"; // High priority - notify immediately
+      case "lead_risk_detected":
+        return "critical"; // Risk leads need immediate attention
       case "lead_max_retries":
         return "warning";
       default:
@@ -312,7 +323,10 @@ export class AlertService {
   /**
    * Get human-readable message for alert
    */
-  private getMessage(type: AlertType, details: Record<string, unknown>): string {
+  private getMessage(
+    type: AlertType,
+    details: Record<string, unknown>,
+  ): string {
     switch (type) {
       case "lead_max_retries":
         return `Lead ${details.leadId} failed after ${details.retryCount} retries: ${details.lastError}`;
@@ -322,16 +336,71 @@ export class AlertService {
         return `Service ${details.service} has been down for ${details.downSinceMinutes} minutes`;
       case "high_value_lead":
         return this.formatHighValueLeadMessage(details);
+      case "lead_risk_detected":
+        return this.formatRiskLeadMessage(details);
       default:
         return `Alert: ${type}`;
     }
   }
 
   /**
-   * Format high-value lead message (RML-810)
+   * Format risk lead message (RML-872)
+   */
+  private formatRiskLeadMessage(details: Record<string, unknown>): string {
+    const lines: string[] = [];
+
+    lines.push(`⚠️ *LEAD DE RISCO DETECTADO*`);
+    lines.push(`*Nome:* ${details.name}`);
+
+    if (details.tier) {
+      lines.push(`*Classificação:* ${details.tier}`);
+    }
+
+    if (details.score !== undefined) {
+      lines.push(`*Score:* ${details.score}`);
+    }
+
+    if (
+      details.alerts &&
+      Array.isArray(details.alerts) &&
+      (details.alerts as string[]).length > 0
+    ) {
+      lines.push(`\n*Alertas:*`);
+      for (const alert of details.alerts as string[]) {
+        lines.push(`🚨 ${alert}`);
+      }
+    }
+
+    if (details.recommendation) {
+      lines.push(`\n*Recomendação:* ${details.recommendation}`);
+    }
+
+    return lines.join("\n");
+  }
+
+  /**
+   * Format high-value lead message (RML-810, improved Jan 15 2026)
+   * Now includes tier badge and score for better context
    */
   private formatHighValueLeadMessage(details: Record<string, unknown>): string {
     const lines: string[] = [];
+
+    // Tier badge with emoji
+    const tier = details.tier as string | undefined;
+    const score = details.score as number | undefined;
+    const tierEmoji: Record<string, string> = {
+      platinum: "💎",
+      gold: "🥇",
+      silver: "🥈",
+    };
+
+    if (tier && tierEmoji[tier]) {
+      const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+      lines.push(
+        `${tierEmoji[tier]} *Tier ${tierLabel}* (Score: ${score || 0}/100)`,
+      );
+      lines.push("");
+    }
 
     lines.push(`*Nome:* ${details.name}`);
 
@@ -359,11 +428,25 @@ export class AlertService {
       lines.push(`*Telefone:* ${details.phone}`);
     }
 
-    if (details.reasons && Array.isArray(details.reasons)) {
-      lines.push(`\n*Por que é premium:*`);
+    if (details.email) {
+      lines.push(`*Email:* ${details.email}`);
+    }
+
+    if (
+      details.reasons &&
+      Array.isArray(details.reasons) &&
+      (details.reasons as string[]).length > 0
+    ) {
+      lines.push("");
+      lines.push(`*Por que é premium:*`);
       for (const reason of details.reasons as string[]) {
         lines.push(`• ${reason}`);
       }
+    }
+
+    if (details.c2sUrl) {
+      lines.push("");
+      lines.push(`<${details.c2sUrl}|Ver no C2S>`);
     }
 
     return lines.join("\n");
@@ -393,10 +476,14 @@ export class AlertService {
   /**
    * Get service health status
    */
-  getServiceHealth(): Record<string, { isUp: boolean; downSinceMinutes?: number }> {
+  getServiceHealth(): Record<
+    string,
+    { isUp: boolean; downSinceMinutes?: number }
+  > {
     const now = Date.now();
     const services = ["diretrix", "work_api", "dbase", "c2s"];
-    const health: Record<string, { isUp: boolean; downSinceMinutes?: number }> = {};
+    const health: Record<string, { isUp: boolean; downSinceMinutes?: number }> =
+      {};
 
     for (const service of services) {
       const downSince = this.serviceDownSince.get(service);
