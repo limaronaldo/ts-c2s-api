@@ -162,8 +162,14 @@ export class CpfDiscoveryService {
 
       if (data.msg && Array.isArray(data.msg) && data.msg.length > 0) {
         const first = data.msg[0];
-        const cpf = first.cpf_cnpj;
+        let cpf = first.cpf_cnpj;
         const name = first.nome || "";
+
+        // Work API returns CPF with leading zeros (14 chars), normalize to 11
+        if (cpf && cpf.length === 14) {
+          cpf = cpf.slice(-11); // Take last 11 digits
+        }
+
         if (cpf && cpf.length === 11) {
           return { cpf, name };
         }

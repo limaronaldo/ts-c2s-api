@@ -584,6 +584,58 @@ src/
 
 ## Changelog
 
+### January 18, 2026
+
+#### Critical Bug Fix: Work API CPF Parsing (14 → 11 chars)
+
+**Problem Discovered:**
+The Work API (Completa Buscas) returns CPFs with 14 characters (leading zeros), e.g., `00032060751810`.
+The code was validating `cpf.length === 11`, rejecting ALL valid CPFs from Work API.
+
+**Impact:**
+- All leads from Jan 13-17 were NOT enriched (0% CPF discovery via Work API)
+- System fell back to Diretrix/DBase which have lower coverage
+- ~25 leads affected
+
+**Root Cause:**
+```typescript
+// BEFORE (broken)
+const cpf = first.cpf_cnpj;
+if (cpf && cpf.length === 11) { ... }  // Always false for 14-char CPFs
+```
+
+**Fix Applied:**
+```typescript
+// AFTER (fixed)
+let cpf = first.cpf_cnpj;
+// Work API returns CPF with leading zeros (14 chars), normalize to 11
+if (cpf && cpf.length === 14) {
+  cpf = cpf.slice(-11); // Take last 11 digits
+}
+if (cpf && cpf.length === 11) { ... }  // Now works!
+```
+
+**Files Modified:**
+- `src/services/cpf-discovery.service.ts`
+  - `findCpfByPhoneWorkApiWithName()` - Added 14→11 normalization
+
+**Verification:**
+```bash
+# Test Work API directly
+curl "https://completa.workbuscas.com/api?token=XXX&modulo=phone&consulta=11943605113"
+# Returns: {"cpf_cnpj":"00032060751810"} (14 chars)
+
+# After fix, system extracts: "32060751810" (11 chars) ✓
+```
+
+**Post-Fix Results:**
+- Manually re-enriched 25 pending leads
+- 24/25 successfully enriched (96%)
+- 7 new leads from Jan 18 auto-enriched by cron ✓
+- System now working automatically
+
+---
+
 ### January 15, 2026
 
 #### High-Value Lead Alerts Improvements
