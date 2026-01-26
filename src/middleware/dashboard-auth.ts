@@ -84,17 +84,27 @@ function createUnauthorizedResponse(realm: string): Response {
  * If DASHBOARD_PASSWORD is not set, auth is disabled (open access).
  */
 export const dashboardAuth = () => {
-  const config = getDashboardAuthConfig();
-
-  if (!config) {
+  // Log initial state
+  const initialConfig = getDashboardAuthConfig();
+  if (initialConfig) {
+    authLogger.info(
+      { user: initialConfig.user },
+      "Dashboard Basic Auth enabled",
+    );
+  } else {
     authLogger.warn("Dashboard auth disabled - DASHBOARD_PASSWORD not set");
-    return new Elysia({ name: "dashboard-auth-disabled" });
   }
-
-  authLogger.info({ user: config.user }, "Dashboard Basic Auth enabled");
 
   return new Elysia({ name: "dashboard-auth" }).onBeforeHandle(
     ({ request }) => {
+      // Check config at request time (env vars may be loaded later)
+      const config = getDashboardAuthConfig();
+
+      // If no password configured, auth is disabled
+      if (!config) {
+        return; // Continue without auth
+      }
+
       // Get the pathname from the full URL
       const url = new URL(request.url);
       const pathname = url.pathname;
