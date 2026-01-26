@@ -328,4 +328,82 @@ export class WorkApiService {
       throw AppError.serviceUnavailable("Work API");
     }
   }
+
+  /**
+   * Fetch CPF by phone number using Work API phone module
+   * Returns array of matches with cpf_cnpj and nome
+   */
+  async fetchByPhoneWithTimeout(
+    phone: string,
+  ): Promise<{
+    data: Array<{ cpf_cnpj: string; nome: string }> | null;
+    timedOut: boolean;
+    error?: string;
+  }> {
+    // Enforce rate limiting before making request
+    await this.enforceRateLimit();
+
+    workApiLogger.info({ phone }, "Fetching CPF by phone from Work API");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, this.TIMEOUT_MS);
+
+    try {
+      const url = `${this.baseUrl}?token=${this.apiKey}&modulo=phone&consulta=${phone}`;
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        workApiLogger.warn(
+          { phone, status: response.status },
+          "Work API phone lookup failed",
+        );
+        return { data: null, timedOut: false };
+      }
+
+      const rawData = await response.json();
+
+      // Check for error response
+      if (rawData.erro || rawData.status === 403) {
+        workApiLogger.warn(
+          { phone, error: rawData.erro || rawData.reason },
+          "Work API phone returned error",
+        );
+        return { data: null, timedOut: false };
+      }
+
+      // Work API returns { msg: [...] } for phone module
+      if (rawData.msg && Array.isArray(rawData.msg) && rawData.msg.length > 0) {
+        workApiLogger.info(
+          { phone, count: rawData.msg.length },
+          "Work API phone found matches",
+        );
+        return { data: rawData.msg, timedOut: false };
+      }
+
+      workApiLogger.debug({ phone }, "Work API phone found no matches");
+      return { data: null, timedOut: false };
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error && error.name === "AbortError") {
+        workApiLogger.warn({ phone }, "Work API phone lookup timed out");
+        return { data: null, timedOut: true, error: "Request timed out" };
+      }
+
+      workApiLogger.error({ phone, error }, "Work API phone lookup error");
+      return {
+        data: null,
+        timedOut: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
 }

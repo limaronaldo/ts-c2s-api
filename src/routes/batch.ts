@@ -26,6 +26,114 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export const batchRoute = new Elysia({ prefix: "/batch" })
   /**
+   * POST /batch/enrich-direct
+   * Direct enrichment without C2S integration - for external database leads
+   *
+   * Takes phone/name and returns enriched person data
+   * Does NOT store in local database or update C2S
+   */
+  .post(
+    "/enrich-direct",
+    async ({ body }) => {
+      const { phone, name, email } = body;
+
+      apiLogger.info({ phone, name }, "Direct enrichment request");
+
+      if (!phone) {
+        return {
+          success: false,
+          error: "Phone is required for direct enrichment",
+        };
+      }
+
+      try {
+        // Step 1: CPF Discovery via Work API phone module (skip DBase/Diretrix)
+        const workApiPhoneResult =
+          await container.workApi.fetchByPhoneWithTimeout(phone);
+
+        let cpf: string | null = null;
+        let foundName: string | null = null;
+
+        if (workApiPhoneResult.data && workApiPhoneResult.data.length > 0) {
+          const first = workApiPhoneResult.data[0];
+          cpf = first.cpf_cnpj;
+          foundName = first.nome;
+
+          // Work API returns CPF with leading zeros (14 chars), normalize to 11
+          if (cpf && cpf.length === 14) {
+            cpf = cpf.slice(-11);
+          }
+        }
+
+        if (!cpf) {
+          return {
+            success: true,
+            data: {
+              status: "unenriched",
+              message: "CPF not found via Work API",
+              phone,
+              name,
+            },
+          };
+        }
+
+        // Step 2: Work API enrichment with full CPF data
+        const workResult = await container.workApi.fetchByCpfWithTimeout(cpf);
+
+        if (!workResult.data) {
+          return {
+            success: true,
+            data: {
+              status: "partial",
+              message: "CPF found but Work API enrichment failed",
+              cpf,
+              cpfSource: "work-api-phone",
+              foundName,
+            },
+          };
+        }
+
+        const person = workResult.data;
+
+        return {
+          success: true,
+          data: {
+            status: "completed",
+            cpf: person.cpf,
+            cpfSource: "work-api",
+            foundName,
+            enrichedName: person.nome,
+            birthDate: person.dataNascimento,
+            gender: person.sexo,
+            motherName: person.nomeMae,
+            income: person.renda,
+            presumedIncome: person.rendaPresumida,
+            netWorth: person.patrimonio,
+            occupation: person.profissao,
+            education: person.escolaridade,
+            maritalStatus: person.estadoCivil,
+            phones: person.telefones,
+            emails: person.emails,
+            addresses: person.enderecos,
+          },
+        };
+      } catch (error) {
+        apiLogger.error({ phone, name, error }, "Direct enrichment failed");
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+    {
+      body: t.Object({
+        phone: t.Optional(t.String()),
+        email: t.Optional(t.String()),
+        name: t.Optional(t.String()),
+      }),
+    },
+  )
+  /**
    * POST /batch/enrich-recent
    * Fetch and enrich the last N leads from C2S
    *
