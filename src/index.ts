@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { staticPlugin } from "@elysiajs/static";
 import { healthRoute } from "./routes/health";
 import { errorHandler } from "./errors/app-error";
 import { logger } from "./utils/logger";
@@ -17,7 +18,10 @@ import { rateLimit } from "./middleware/rate-limit";
 import { apiKeyAuth, getApiKeysFromEnv } from "./middleware/auth";
 import { metricsMiddleware } from "./middleware/metrics";
 
-const app = new Elysia().use(errorHandler).use(healthRoute);
+const app = new Elysia()
+  .use(errorHandler)
+  .use(staticPlugin({ assets: "public", prefix: "/" }))
+  .use(healthRoute);
 
 // Only load full routes if all required env vars are present
 // This allows the health check to work even without full configuration

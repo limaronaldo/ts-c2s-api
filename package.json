@@ -25,6 +25,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@elysiajs/static": "^1.4.7",
     "@neondatabase/serverless": "^1.0.2",
     "@types/pg": "^8.16.0",
     "croner": "^9.1.0",
