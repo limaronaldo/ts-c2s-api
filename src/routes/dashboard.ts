@@ -7,6 +7,8 @@
  * - GET /dashboard/retryable - List leads eligible for retry
  * - POST /dashboard/retry - Manually trigger retry processing
  * - GET /dashboard/export - Export leads as CSV
+ *
+ * Protected by Session Auth with custom login page (RML-811)
  */
 
 import { Elysia, t } from "elysia";
@@ -22,6 +24,7 @@ import {
   type CronJobConfig,
 } from "../jobs/enrichment-cron";
 import { generateDashboardHtml } from "../templates/dashboard.html";
+import { generateLoginHtml } from "../templates/login.html";
 import { getConfig } from "../config";
 import { logger } from "../utils/logger";
 
@@ -36,7 +39,224 @@ const RETRY_DELAYS_MS = [
   16 * 60 * 60 * 1000, // 16 hours
 ];
 
+// Session storage (in-memory, resets on deploy)
+const sessions = new Map<string, { user: string; expiresAt: number }>();
+const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Get dashboard auth config from environment
+ */
+function getDashboardAuthConfig() {
+  const user = process.env.DASHBOARD_USER || "admin";
+  const password = process.env.DASHBOARD_PASSWORD;
+
+  if (!password) {
+    return null;
+  }
+
+  return { user, password };
+}
+
+/**
+ * Generate a random session token
+ */
+function generateSessionToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Create a session for authenticated user
+ */
+function createSession(user: string): string {
+  const token = generateSessionToken();
+  sessions.set(token, {
+    user,
+    expiresAt: Date.now() + SESSION_DURATION_MS,
+  });
+  return token;
+}
+
+/**
+ * Validate session token from cookie
+ */
+function validateSession(token: string | undefined): boolean {
+  if (!token) return false;
+
+  const session = sessions.get(token);
+  if (!session) return false;
+
+  if (Date.now() > session.expiresAt) {
+    sessions.delete(token);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Parse cookies from request
+ */
+function parseCookies(cookieHeader: string | null): Record<string, string> {
+  if (!cookieHeader) return {};
+
+  return cookieHeader.split(";").reduce(
+    (acc, cookie) => {
+      const [key, value] = cookie.trim().split("=");
+      if (key && value) acc[key] = value;
+      return acc;
+    },
+    {} as Record<string, string>,
+  );
+}
+
+/**
+ * Routes that don't require auth (login page and login action)
+ */
+const PUBLIC_PATHS = ["/dashboard/login"];
+
 export const dashboardRoute = new Elysia({ prefix: "/dashboard" })
+  // Session-based auth for all dashboard routes (RML-811)
+  .onBeforeHandle(({ request }) => {
+    const config = getDashboardAuthConfig();
+    const url = new URL(request.url);
+
+    // If no password configured, auth is disabled
+    if (!config) {
+      return;
+    }
+
+    // Allow public paths (login page)
+    if (PUBLIC_PATHS.includes(url.pathname)) {
+      return;
+    }
+
+    // Check session cookie
+    const cookies = parseCookies(request.headers.get("Cookie"));
+    const sessionToken = cookies["dashboard_session"];
+
+    if (!validateSession(sessionToken)) {
+      // Redirect to login page
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/dashboard/login",
+        },
+      });
+    }
+
+    dashboardLogger.debug("Dashboard session valid");
+  })
+
+  /**
+   * GET /dashboard/login - Show login page
+   */
+  .get("/login", ({ request }) => {
+    const config = getDashboardAuthConfig();
+
+    // If auth disabled, redirect to dashboard
+    if (!config) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard" },
+      });
+    }
+
+    // If already logged in, redirect to dashboard
+    const cookies = parseCookies(request.headers.get("Cookie"));
+    if (validateSession(cookies["dashboard_session"])) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard" },
+      });
+    }
+
+    const url = new URL(request.url);
+    const error = url.searchParams.get("error");
+
+    const html = generateLoginHtml(
+      error === "invalid" ? "Usuário ou senha incorretos" : undefined,
+    );
+
+    return new Response(html, {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  })
+
+  /**
+   * POST /dashboard/login - Process login (accepts form data)
+   */
+  .post("/login", async ({ request }) => {
+    const config = getDashboardAuthConfig();
+
+    if (!config) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "/dashboard" },
+      });
+    }
+
+    // Parse form data
+    const contentType = request.headers.get("Content-Type") || "";
+    let username = "";
+    let password = "";
+
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const formData = await request.formData();
+      username = formData.get("username")?.toString() || "";
+      password = formData.get("password")?.toString() || "";
+    } else if (contentType.includes("application/json")) {
+      const json = await request.json();
+      username = json.username || "";
+      password = json.password || "";
+    }
+
+    if (username === config.user && password === config.password) {
+      // Create session
+      const token = createSession(username);
+
+      dashboardLogger.info({ user: username }, "Dashboard login successful");
+
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: "/dashboard",
+          "Set-Cookie": `dashboard_session=${token}; Path=/dashboard; HttpOnly; SameSite=Strict; Max-Age=${SESSION_DURATION_MS / 1000}${process.env.NODE_ENV === "production" ? "; Secure" : ""}`,
+        },
+      });
+    }
+
+    dashboardLogger.warn({ user: username }, "Dashboard login failed");
+
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "/dashboard/login?error=invalid" },
+    });
+  })
+
+  /**
+   * GET /dashboard/logout - Logout
+   */
+  .get("/logout", ({ request }) => {
+    const cookies = parseCookies(request.headers.get("Cookie"));
+    const sessionToken = cookies["dashboard_session"];
+
+    if (sessionToken) {
+      sessions.delete(sessionToken);
+    }
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: "/dashboard/login",
+        "Set-Cookie":
+          "dashboard_session=; Path=/dashboard; HttpOnly; Max-Age=0",
+      },
+    });
+  })
   /**
    * GET /dashboard - Serve HTML dashboard
    */
