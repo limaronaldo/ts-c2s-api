@@ -66,14 +66,15 @@ container.c2sService.createMessage(leadId, msg);
 | Serviço | Arquivo | Função |
 |---------|---------|--------|
 | WorkApiService | `services/work-api.service.ts` | Completa Buscas API |
-| CpfDiscoveryService | `services/cpf-discovery.service.ts` | Descoberta de CPF |
+| CpfDiscoveryService | `services/cpf-discovery.service.ts` | Descoberta de CPF (4 tiers) |
 | EnrichmentService | `services/enrichment.service.ts` | Orquestrador principal |
 | C2SService | `services/c2s.service.ts` | Integração CRM |
-| AlertService | `services/alert.service.ts` | Slack + Email |
+| AlertService | `services/alert.service.ts` | Slack + Email + Low rate alerts |
 | DbStorageService | `services/db-storage.service.ts` | Persistência |
 | CpfLookupService | `services/cpf-lookup.service.ts` | Busca CPF por nome (DuckDB 223M) |
 | BulkEnrichmentService | `services/bulk-enrichment.service.ts` | Enriquecimento em massa |
 | ProfileReportService | `services/profile-report.service.ts` | Relatórios MD/HTML/PDF |
+| EnrichmentMonitorService | `services/enrichment-monitor.service.ts` | Monitor de taxa (<80% alert) |
 
 ---
 
@@ -114,6 +115,9 @@ ts-c2s-api/
 | `/batch/enrich-direct` | POST | Batch enrichment (Work API only) |
 | `/webhook/c2s` | POST | Webhook C2S |
 | `/webhook/google-ads` | POST | Webhook Google Ads |
+| `/stats` | GET | Estatísticas de enriquecimento |
+| `/stats/enrichment` | GET | Taxa de enriquecimento |
+| `/stats/health` | GET | Health dos serviços |
 
 ### Discovery Routes (CPF Lookup & Bulk Enrichment)
 
@@ -157,28 +161,32 @@ c2s.lead_duplicates - Tracking de duplicatas
 
 ## Batch Enrichment - CONCLUÍDO ✅ (Janeiro 2026)
 
-### Resultados Finais (25/01/2026)
+### Resultados Finais (26/01/2026)
 
 | Métrica | Valor |
 |---------|-------|
 | Total leads | 36,113 |
-| Total enriched | 34,053 |
-| **CPF Rate** | **90.9%** |
+| Total enriched | 30,940 |
+| Invalid phones | 361 |
+| **CPF Rate** | **91.8%** |
 
 ### Distribuição por Status
 
 | Status | Count | % |
 |--------|-------|---|
-| ✅ Completed | 24,629 | 72.2% |
-| ⚠️ Partial | 6,311 | 18.5% |
-| ❌ Unenriched | 3,113 | 9.1% |
+| ✅ Completed | ~24,600 | 72% |
+| ⚠️ Partial | ~6,300 | 18% |
+| ❌ Unenriched | ~2,700 | 8% |
+| 🚫 Invalid Phone | 361 | 1% |
 
 ### Cronograma
 
 - **Jan 19:** Export 36,113 leads do C2S
 - **Jan 20:** Início do batch enrichment
 - **Jan 25:** Retry dos 3,386 unenriched (+321 CPFs)
-- **Jan 25:** ✅ **CONCLUÍDO**
+- **Jan 26:** Normalização de 1,094 telefones com DDD 55 duplicado
+- **Jan 26:** Marcação de 361 telefones inválidos
+- **Jan 26:** ✅ **CONCLUÍDO** - Taxa: 91.8%
 
 ### Documentação Completa
 
@@ -235,15 +243,52 @@ this.checkHighValueLeadAsync(leadId, name, data); // fire and forget
 ### CPF Lookup API (DuckDB - 223M CPFs)
 
 - **Endpoint:** https://cpf-lookup-api.fly.dev
-- **Uso:** Busca por nome como fallback, validação de CPF
+- **Uso:** Busca por nome como Tier 4 fallback, validação de CPF
 - **Endpoints:**
   - `GET /search/:name` - Busca CPF por nome (lento, pode demorar 2+ min)
   - `GET /cpf/:cpf` - Busca dados por CPF conhecido
   - `GET /masked/:digits` - Busca por CPF mascarado (6 dígitos do meio)
   - `GET /health` - Health check
   - `GET /stats` - Estatísticas do banco
-- **RAM:** Requer 16GB para buscas por nome (upgrade temporário via `fly scale memory 16384`)
-- **Documentação:** `docs/CPF_DISCOVERY_PROCESS.md`
+- **RAM:** Configurado com 4GB (shared-cpu-2x)
+
+---
+
+## CPF Discovery - 4 Tiers
+
+O serviço de descoberta de CPF usa 4 camadas de fallback:
+
+| Tier | Serviço | Descrição | Velocidade |
+|------|---------|-----------|------------|
+| 1 | DBase | Busca local por telefone | ~100ms |
+| 2 | Diretrix | API externa por telefone | ~500ms |
+| 3 | Work API | Módulo phone | ~2s |
+| 4 | CPF Lookup (DuckDB) | Busca por nome (223M registros) | ~2min |
+
+**Tier 4 só é acionado quando:**
+- Tiers 1-3 falharam
+- Lead tem nome com 5+ caracteres
+- Name match score >= 0.7
+
+---
+
+## Monitoramento
+
+### EnrichmentMonitorService
+
+- Verifica taxa de enriquecimento a cada 6 horas
+- Alerta via Slack + email quando taxa < 80%
+- Endpoint `/stats` expõe métricas em tempo real
+
+### Tipos de Alerta
+
+| Tipo | Severidade | Descrição |
+|------|------------|-----------|
+| `high_value_lead` | critical | Lead de alto valor detectado |
+| `high_error_rate` | critical | Taxa de erro alta |
+| `service_down` | critical | Serviço indisponível |
+| `low_enrichment_rate` | warning | Taxa de enriquecimento < 80% |
+| `lead_max_retries` | warning | Lead falhou após max retries |
 
 ---
 

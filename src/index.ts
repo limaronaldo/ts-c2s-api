@@ -73,6 +73,7 @@ if (hasFullConfig()) {
   const { batchRoute } = await import("./routes/batch");
   const { dashboardRoute } = await import("./routes/dashboard");
   const { discoveryRoute } = await import("./routes/discovery");
+  const { statsRoute } = await import("./routes/stats");
 
   app
     .use(leadsRoute)
@@ -88,7 +89,8 @@ if (hasFullConfig()) {
     .use(metricsRoute)
     .use(batchRoute)
     .use(dashboardRoute)
-    .use(discoveryRoute);
+    .use(discoveryRoute)
+    .use(statsRoute);
 
   // Start cron job if enabled (RML-619)
   if (config.ENABLE_CRON) {
