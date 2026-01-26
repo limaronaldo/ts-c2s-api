@@ -10,6 +10,9 @@ import { IbviPropertyService } from "./services/ibvi-property.service";
 import { WebInsightService } from "./services/web-insight.service";
 import { PrometheusService } from "./services/prometheus.service";
 import { LeadAnalysisService } from "./services/lead-analysis.service";
+import { CpfLookupService } from "./services/cpf-lookup.service";
+import { BulkEnrichmentService } from "./services/bulk-enrichment.service";
+import { ProfileReportService } from "./services/profile-report.service";
 
 /**
  * Simple dependency injection container
@@ -28,6 +31,9 @@ class ServiceContainer {
   private _webInsight?: WebInsightService;
   private _prometheus?: PrometheusService;
   private _leadAnalysis?: LeadAnalysisService;
+  private _cpfLookup?: CpfLookupService;
+  private _bulkEnrichment?: BulkEnrichmentService;
+  private _profileReport?: ProfileReportService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -113,6 +119,27 @@ class ServiceContainer {
     return this._leadAnalysis;
   }
 
+  get cpfLookup(): CpfLookupService {
+    if (!this._cpfLookup) {
+      this._cpfLookup = new CpfLookupService();
+    }
+    return this._cpfLookup;
+  }
+
+  get bulkEnrichment(): BulkEnrichmentService {
+    if (!this._bulkEnrichment) {
+      this._bulkEnrichment = new BulkEnrichmentService();
+    }
+    return this._bulkEnrichment;
+  }
+
+  get profileReport(): ProfileReportService {
+    if (!this._profileReport) {
+      this._profileReport = new ProfileReportService();
+    }
+    return this._profileReport;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -127,6 +154,9 @@ class ServiceContainer {
     this._webInsight = undefined;
     this._prometheus = undefined;
     this._leadAnalysis = undefined;
+    this._cpfLookup = undefined;
+    this._bulkEnrichment = undefined;
+    this._profileReport = undefined;
   }
 }
 

@@ -123,6 +123,13 @@ const configSchema = z.object({
     .string()
     .default("true")
     .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // CPF Lookup API (DuckDB with 223M CPFs - name-based search)
+  CPF_LOOKUP_API_URL: z
+    .string()
+    .url()
+    .default("https://cpf-lookup-api.fly.dev"),
+  CPF_LOOKUP_TIMEOUT_MS: z.coerce.number().default(120000), // 2 minutes for name searches
 });
 
 export type Config = z.infer<typeof configSchema>;

@@ -1,182 +1,329 @@
-import { enrichmentLogger } from "../utils/logger";
-
 /**
- * CPF record from the cpf-lookup-api
+ * CPF Lookup Service - Busca CPF por nome usando DuckDB API (223M registros)
+ *
+ * Este serviço permite descobrir CPFs a partir do nome completo da pessoa,
+ * utilizando a API cpf-lookup-api hospedada no Fly.io.
  */
-export interface CpfLookupRecord {
+
+import { getConfig } from "../config";
+
+// Logger inline para evitar dependência circular
+const log = (level: string, msg: string, data?: Record<string, unknown>) => {
+  console.log(
+    JSON.stringify({
+      level,
+      module: "cpf-lookup",
+      msg,
+      ...data,
+      timestamp: new Date().toISOString(),
+    }),
+  );
+};
+
+export interface CpfLookupResult {
   cpf: string;
   nome_completo: string;
-  sexo: string | null;
-  data_nascimento: string | null;
+  sexo?: string;
+  data_nascimento?: string;
 }
 
-/**
- * Service for cpf-lookup-api.fly.dev
- * Database: DuckDB with 223M+ CPF records
- *
- * Endpoints:
- * - GET /cpf/:cpf - Lookup by CPF (fast, indexed)
- * - GET /search/:name - Search by name (slow, full scan)
- * - GET /masked/:masked - Lookup by masked CPF (6 middle digits)
- * - GET /health - Health check
- * - GET /stats - Database stats
- */
+export interface CpfLookupResponse {
+  count: number;
+  results: CpfLookupResult[];
+}
+
+export interface CpfSearchResult {
+  success: boolean;
+  count: number;
+  results: CpfLookupResult[];
+  error?: string;
+}
+
 export class CpfLookupService {
-  private baseUrl: string;
-  private timeout: number;
+  private readonly baseUrl: string;
+  private readonly timeoutMs: number;
 
   constructor() {
-    this.baseUrl =
-      process.env.CPF_LOOKUP_API_URL || "https://cpf-lookup-api.fly.dev";
-    this.timeout = 10000; // 10 seconds
+    const config = getConfig();
+    this.baseUrl = config.CPF_LOOKUP_API_URL;
+    this.timeoutMs = config.CPF_LOOKUP_TIMEOUT_MS;
   }
 
   /**
-   * Lookup CPF by number - validates and returns full record
-   * Fast: Uses indexed lookup on CPF column
+   * Verifica se a API está online
    */
-  async lookupByCpf(cpf: string): Promise<CpfLookupRecord | null> {
-    const cleanCpf = cpf.replace(/\D/g, "");
-
-    if (cleanCpf.length !== 11) {
-      enrichmentLogger.warn({ cpf }, "Invalid CPF length for lookup");
-      return null;
-    }
-
-    try {
-      const response = await fetch(`${this.baseUrl}/cpf/${cleanCpf}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(this.timeout),
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          enrichmentLogger.debug({ cpf: cleanCpf }, "CPF not found in lookup");
-          return null;
-        }
-        enrichmentLogger.warn(
-          { cpf: cleanCpf, status: response.status },
-          "CPF lookup API error",
-        );
-        return null;
-      }
-
-      const record: CpfLookupRecord = await response.json();
-
-      enrichmentLogger.info(
-        {
-          cpf: cleanCpf,
-          nome: record.nome_completo,
-          sexo: record.sexo,
-        },
-        "CPF validated via cpf-lookup-api",
-      );
-
-      return record;
-    } catch (error) {
-      enrichmentLogger.warn(
-        { cpf: cleanCpf, error: String(error) },
-        "CPF lookup API request failed",
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Lookup by masked CPF (e.g., ***.123.456-**)
-   * Returns multiple matches based on 6 middle digits
-   */
-  async lookupByMasked(
-    maskedCpf: string,
-  ): Promise<{ count: number; results: CpfLookupRecord[] } | null> {
-    const digits = maskedCpf.replace(/\D/g, "");
-
-    if (digits.length < 6) {
-      enrichmentLogger.warn(
-        { maskedCpf },
-        "Need at least 6 digits for masked lookup",
-      );
-      return null;
-    }
-
-    try {
-      const response = await fetch(`${this.baseUrl}/masked/${maskedCpf}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(this.timeout),
-      });
-
-      if (!response.ok) {
-        enrichmentLogger.warn(
-          { maskedCpf, status: response.status },
-          "Masked CPF lookup failed",
-        );
-        return null;
-      }
-
-      const result = await response.json();
-
-      enrichmentLogger.info(
-        { maskedCpf, count: result.count },
-        "Masked CPF lookup completed",
-      );
-
-      return result;
-    } catch (error) {
-      enrichmentLogger.warn(
-        { maskedCpf, error: String(error) },
-        "Masked CPF lookup request failed",
-      );
-      return null;
-    }
-  }
-
-  /**
-   * Validate CPF and get real name
-   * Useful after discovering a CPF to confirm it's valid
-   */
-  async validateCpf(
-    cpf: string,
-  ): Promise<{ valid: boolean; name?: string; record?: CpfLookupRecord }> {
-    const record = await this.lookupByCpf(cpf);
-
-    if (!record) {
-      return { valid: false };
-    }
-
-    return {
-      valid: true,
-      name: record.nome_completo,
-      record,
-    };
-  }
-
-  /**
-   * Check API health
-   */
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(): Promise<{
+    ok: boolean;
+    database?: string;
+    total_records?: number;
+  }> {
     try {
       const response = await fetch(`${this.baseUrl}/health`, {
         signal: AbortSignal.timeout(5000),
       });
-      return response.ok;
-    } catch {
-      return false;
+
+      if (!response.ok) {
+        return { ok: false };
+      }
+
+      // Buscar stats também
+      const statsResponse = await fetch(`${this.baseUrl}/stats`, {
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (statsResponse.ok) {
+        const stats = await statsResponse.json();
+        return {
+          ok: true,
+          database: stats.database,
+          total_records: stats.total_records,
+        };
+      }
+
+      return { ok: true };
+    } catch (error) {
+      log("error", "Health check failed", { error: String(error) });
+      return { ok: false };
     }
   }
 
   /**
-   * Get database stats
+   * Busca CPF por nome completo
+   * ATENÇÃO: Pode ser lento (full scan em 223M registros)
    */
-  async getStats(): Promise<{ database: string; total_records: number } | null> {
+  async searchByName(name: string): Promise<CpfSearchResult> {
+    const normalizedName = name.trim().toUpperCase();
+
+    log("info", "Searching CPF by name", { name: normalizedName });
+
     try {
-      const response = await fetch(`${this.baseUrl}/stats`, {
-        signal: AbortSignal.timeout(5000),
+      const url = `${this.baseUrl}/search/${encodeURIComponent(normalizedName)}`;
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
-      if (!response.ok) return null;
-      return await response.json();
-    } catch {
+
+      if (!response.ok) {
+        log("warn", "Search returned non-OK status", {
+          status: response.status,
+        });
+        return {
+          success: false,
+          count: 0,
+          results: [],
+          error: `HTTP ${response.status}`,
+        };
+      }
+
+      const data = (await response.json()) as CpfLookupResponse;
+
+      log("info", "Search completed", {
+        name: normalizedName,
+        count: data.count,
+      });
+
+      return {
+        success: true,
+        count: data.count || 0,
+        results: data.results || [],
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      if (errorMsg.includes("timeout") || errorMsg.includes("aborted")) {
+        log("warn", "Search timed out", {
+          name: normalizedName,
+          timeoutMs: this.timeoutMs,
+        });
+        return {
+          success: false,
+          count: 0,
+          results: [],
+          error: "Timeout - busca por nome pode demorar com 4GB de RAM",
+        };
+      }
+
+      log("error", "Search failed", { name: normalizedName, error: errorMsg });
+      return {
+        success: false,
+        count: 0,
+        results: [],
+        error: errorMsg,
+      };
+    }
+  }
+
+  /**
+   * Busca dados por CPF conhecido
+   */
+  async getByCpf(cpf: string): Promise<CpfLookupResult | null> {
+    const normalizedCpf = cpf.replace(/\D/g, "");
+
+    log("info", "Looking up CPF", {
+      cpf: normalizedCpf.substring(0, 3) + "***",
+    });
+
+    try {
+      const url = `${this.baseUrl}/cpf/${normalizedCpf}`;
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          log("info", "CPF not found in database");
+          return null;
+        }
+        log("warn", "Lookup returned non-OK status", {
+          status: response.status,
+        });
+        return null;
+      }
+
+      const data = (await response.json()) as CpfLookupResult;
+      log("info", "CPF found", {
+        nome: data.nome_completo?.substring(0, 20) + "...",
+      });
+
+      return data;
+    } catch (error) {
+      log("error", "CPF lookup failed", { error: String(error) });
+      return null;
+    }
+  }
+
+  /**
+   * Busca múltiplos CPFs por lista de nomes
+   * Processa em série para evitar sobrecarga da API
+   */
+  async searchMultipleByName(
+    names: string[],
+    options: {
+      delayMs?: number;
+      onProgress?: (
+        current: number,
+        total: number,
+        result: CpfSearchResult,
+      ) => void;
+    } = {},
+  ): Promise<Map<string, CpfSearchResult>> {
+    const { delayMs = 1000, onProgress } = options;
+    const results = new Map<string, CpfSearchResult>();
+
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      const result = await this.searchByName(name);
+      results.set(name, result);
+
+      if (onProgress) {
+        onProgress(i + 1, names.length, result);
+      }
+
+      // Delay entre requests para não sobrecarregar
+      if (i < names.length - 1 && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Encontra o melhor match de CPF para um nome
+   * Retorna o primeiro resultado se houver match exato, ou null
+   */
+  async findBestMatch(name: string): Promise<CpfLookupResult | null> {
+    const result = await this.searchByName(name);
+
+    if (!result.success || result.count === 0) {
+      return null;
+    }
+
+    // Se tem apenas 1 resultado, retorna ele
+    if (result.count === 1) {
+      return result.results[0];
+    }
+
+    // Se tem múltiplos, tenta encontrar match exato do nome
+    const normalizedName = name.trim().toUpperCase();
+    const exactMatch = result.results.find(
+      (r) => r.nome_completo.toUpperCase() === normalizedName,
+    );
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // Retorna o primeiro resultado como fallback
+    log("warn", "Multiple results, returning first", {
+      name,
+      count: result.count,
+    });
+    return result.results[0];
+  }
+
+  /**
+   * Alias para getByCpf - compatibilidade com cpf-discovery.service.ts
+   */
+  async lookupByCpf(cpf: string): Promise<CpfLookupResult | null> {
+    return this.getByCpf(cpf);
+  }
+
+  /**
+   * Busca CPF por formato mascarado (ex: ***.123.456-**)
+   * Extrai os 6 dígitos do meio e busca por padrão
+   */
+  async lookupByMasked(
+    maskedCpf: string,
+  ): Promise<{ count: number; results: CpfLookupResult[] } | null> {
+    // Extrai os dígitos visíveis do CPF mascarado
+    // Formato esperado: ***.XXX.XXX-** onde XXX.XXX são os 6 dígitos do meio
+    const digits = maskedCpf.replace(/\D/g, "");
+
+    if (digits.length < 6) {
+      log("warn", "Masked CPF has insufficient digits", { maskedCpf, digits });
+      return null;
+    }
+
+    log("info", "Looking up masked CPF", { maskedCpf, digits });
+
+    try {
+      const url = `${this.baseUrl}/masked/${encodeURIComponent(digits)}`;
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          log("info", "No CPFs found for masked pattern");
+          return { count: 0, results: [] };
+        }
+        log("warn", "Masked lookup returned non-OK status", {
+          status: response.status,
+        });
+        return null;
+      }
+
+      const data = (await response.json()) as CpfLookupResponse;
+      log("info", "Masked lookup completed", {
+        maskedCpf,
+        count: data.count,
+      });
+
+      return {
+        count: data.count || 0,
+        results: data.results || [],
+      };
+    } catch (error) {
+      log("error", "Masked CPF lookup failed", { error: String(error) });
       return null;
     }
   }

@@ -25,6 +25,16 @@ export class DbStorageService {
   }
 
   // Party operations
+  async findPartyById(id: string): Promise<Party | null> {
+    const results = await this.db
+      .select()
+      .from(schema.parties)
+      .where(eq(schema.parties.id, id))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
   async findPartyByCpf(cpf: string): Promise<Party | null> {
     const normalized = normalizeCpf(cpf);
     const results = await this.db
