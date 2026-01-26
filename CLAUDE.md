@@ -305,11 +305,102 @@ WORK_API            # Completa Buscas key
 ALERT_WEBHOOK_URL   # Slack webhook
 RESEND_API_KEY      # Email alerts
 
+# Dashboard Auth (RML-811)
+DASHBOARD_USER      # Username para login do dashboard
+DASHBOARD_PASSWORD  # Senha para login do dashboard
+
 # Optional
 ENABLE_CRON=true    # Cron job
 INCOME_MULTIPLIER=1.9
 CPF_LOOKUP_API_URL  # DuckDB API (default: https://cpf-lookup-api.fly.dev)
 ```
+
+---
+
+## Dashboard Authentication (RML-811)
+
+### Overview
+
+O dashboard (`/dashboard`) é protegido por autenticação baseada em sessão com página de login customizada.
+
+**URL:** https://ts-c2s-api.fly.dev/dashboard
+
+### Configuração
+
+Definir as variáveis de ambiente no Fly.io:
+
+```bash
+fly secrets set DASHBOARD_USER=admin
+fly secrets set DASHBOARD_PASSWORD=sua_senha_segura
+```
+
+### Arquitetura
+
+| Componente | Arquivo | Descrição |
+|------------|---------|-----------|
+| Login Page | `src/templates/login.html.ts` | Página HTML com branding MBRAS |
+| Auth Logic | `src/routes/dashboard.ts` | Sessões + cookies |
+| Logo | `public/icon-mbras.png` | Logo MBRAS (servida estaticamente) |
+
+### Fluxo de Autenticação
+
+```
+1. Usuário acessa /dashboard
+2. Se não autenticado → redirect para /dashboard/login
+3. Usuário submete formulário de login
+4. Se credenciais válidas:
+   - Cria sessão com token único
+   - Define cookie `dashboard_session` (24h, HttpOnly, Secure)
+   - Redirect para /dashboard
+5. Se inválidas → mostra erro na página de login
+```
+
+### Rotas de Autenticação
+
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/dashboard/login` | GET | Página de login |
+| `/dashboard/login` | POST | Processar login (form-urlencoded) |
+| `/dashboard/logout` | GET | Encerrar sessão |
+
+### Sessões
+
+- **Armazenamento:** In-memory Map (reinicia com deploy)
+- **Duração:** 24 horas
+- **Token:** UUID v4 gerado com `crypto.randomUUID()`
+- **Cookie:** `dashboard_session` com flags HttpOnly, Secure, SameSite=Lax
+
+### Branding
+
+- **Cores:** Navy (#1a3a5c) + Gold (#b8a06a)
+- **Fonte:** Cormorant Garamond (títulos) + Inter (corpo)
+- **Logo:** `public/icon-mbras.png` servida via `@elysiajs/static`
+
+### Arquivos Estáticos
+
+Plugin `@elysiajs/static` configurado em `src/index.ts`:
+
+```typescript
+import { staticPlugin } from "@elysiajs/static";
+app.use(staticPlugin({ assets: "public", prefix: "/" }));
+```
+
+A pasta `public/` é copiada no Dockerfile para produção.
+
+### Troubleshooting
+
+**Logo não aparece:**
+- Verificar se `public/icon-mbras.png` existe
+- Verificar se Dockerfile copia a pasta `public/`
+- Verificar se plugin static está configurado
+
+**Sessão expira imediatamente:**
+- Verificar se cookie tem flag Secure (requer HTTPS)
+- Verificar se SameSite está configurado corretamente
+
+**Credenciais não funcionam:**
+- Verificar secrets no Fly.io: `fly secrets list`
+- Re-definir: `fly secrets set DASHBOARD_USER=x DASHBOARD_PASSWORD=y`
 
 ---
 
@@ -357,8 +448,6 @@ CPF_LOOKUP_API_URL  # DuckDB API (default: https://cpf-lookup-api.fly.dev)
 - RML-797: Prometheus metrics
 - RML-809: Smart cron schedule
 - RML-810: High-value alerts
-
-**Pending:**
 - RML-811: Dashboard authentication
 
 **Criar issue:** `/linear-issue <título>`
@@ -447,5 +536,5 @@ memory_list_compact(tags_all=["ts-c2s-api"])
 
 ---
 
-**Última atualização:** Janeiro 25, 2026  
+**Última atualização:** Janeiro 26, 2026  
 **Mantido por:** Ronaldo Lima + Claude AI
