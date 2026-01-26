@@ -99,6 +99,11 @@ if (hasFullConfig()) {
       delayMs: config.CRON_DELAY_MS,
     });
   }
+
+  // Start enrichment rate monitor
+  const { enrichmentMonitor } =
+    await import("./services/enrichment-monitor.service");
+  enrichmentMonitor.start();
 } else {
   logger.warn("Running in minimal mode - only health check available");
   logger.warn(
@@ -117,6 +122,13 @@ logger.info({ port, host }, `Server started on http://${host}:${port}`);
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
   stopEnrichmentCron();
+  try {
+    const { enrichmentMonitor } =
+      await import("./services/enrichment-monitor.service");
+    enrichmentMonitor.stop();
+  } catch {
+    // Monitor may not be initialized
+  }
   await closeRedis();
   const { closeDb } = await import("./db/client");
   await closeDb();
@@ -126,6 +138,13 @@ process.on("SIGTERM", async () => {
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
   stopEnrichmentCron();
+  try {
+    const { enrichmentMonitor } =
+      await import("./services/enrichment-monitor.service");
+    enrichmentMonitor.stop();
+  } catch {
+    // Monitor may not be initialized
+  }
   await closeRedis();
   const { closeDb } = await import("./db/client");
   await closeDb();

@@ -20,7 +20,8 @@ export type AlertType =
   | "high_error_rate"
   | "service_down"
   | "high_value_lead"
-  | "lead_risk_detected";
+  | "lead_risk_detected"
+  | "low_enrichment_rate";
 
 export type AlertSeverity = "warning" | "critical";
 
@@ -301,6 +302,20 @@ export class AlertService {
   }
 
   /**
+   * Send alert for low enrichment rate (below 80%)
+   */
+  async alertLowEnrichmentRate(details: {
+    currentRate: number;
+    threshold: number;
+    totalLeads: number;
+    enrichedLeads: number;
+    unenrichedLeads: number;
+    period: string;
+  }): Promise<void> {
+    await this.sendAlert("low_enrichment_rate", details);
+  }
+
+  /**
    * Get severity based on alert type
    */
   private getSeverity(type: AlertType): AlertSeverity {
@@ -313,6 +328,8 @@ export class AlertService {
         return "critical"; // High priority - notify immediately
       case "lead_risk_detected":
         return "critical"; // Risk leads need immediate attention
+      case "low_enrichment_rate":
+        return "warning"; // Warning level - needs attention but not urgent
       case "lead_max_retries":
         return "warning";
       default:
@@ -338,6 +355,14 @@ export class AlertService {
         return this.formatHighValueLeadMessage(details);
       case "lead_risk_detected":
         return this.formatRiskLeadMessage(details);
+      case "low_enrichment_rate":
+        return (
+          `Taxa de enriquecimento caiu para ${details.currentRate}% (mínimo: ${details.threshold}%)\n` +
+          `*Total:* ${details.totalLeads} leads\n` +
+          `*Enriquecidos:* ${details.enrichedLeads}\n` +
+          `*Não enriquecidos:* ${details.unenrichedLeads}\n` +
+          `*Período:* ${details.period}`
+        );
       default:
         return `Alert: ${type}`;
     }
