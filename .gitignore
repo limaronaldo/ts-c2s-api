@@ -179,3 +179,10 @@ exports/*.duckdb
 exports/*.json
 exports/*.log
 exports/*.csv
+
+# Logs folder
+logs/
+
+# Temp files
+nohup.out
+*.tmp

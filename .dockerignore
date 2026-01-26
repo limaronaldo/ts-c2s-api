@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+.tsbuildinfo
+
+# Data files
+exports/
+*.duckdb
+*.duckdb.wal
+*.csv
+*.json.gz
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Tests
+coverage/
+.nyc_output/
+
+# Misc
+.DS_Store
+Thumbs.db
+*.bak
