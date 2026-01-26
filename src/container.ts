@@ -13,6 +13,7 @@ import { LeadAnalysisService } from "./services/lead-analysis.service";
 import { CpfLookupService } from "./services/cpf-lookup.service";
 import { BulkEnrichmentService } from "./services/bulk-enrichment.service";
 import { ProfileReportService } from "./services/profile-report.service";
+import { LeadQualityService } from "./services/lead-quality.service";
 
 /**
  * Simple dependency injection container
@@ -34,6 +35,7 @@ class ServiceContainer {
   private _cpfLookup?: CpfLookupService;
   private _bulkEnrichment?: BulkEnrichmentService;
   private _profileReport?: ProfileReportService;
+  private _leadQuality?: LeadQualityService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -140,6 +142,13 @@ class ServiceContainer {
     return this._profileReport;
   }
 
+  get leadQuality(): LeadQualityService {
+    if (!this._leadQuality) {
+      this._leadQuality = new LeadQualityService();
+    }
+    return this._leadQuality;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -157,6 +166,7 @@ class ServiceContainer {
     this._cpfLookup = undefined;
     this._bulkEnrichment = undefined;
     this._profileReport = undefined;
+    this._leadQuality = undefined;
   }
 }
 

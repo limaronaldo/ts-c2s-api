@@ -42,6 +42,30 @@ export const cpfDiscoveryDuration = new client.Histogram({
   registers: [register],
 });
 
+// CPF Discovery tier metrics (track which tier found the CPF)
+export const cpfDiscoveryByTier = new client.Counter({
+  name: "c2s_cpf_discovery_by_tier_total",
+  help: "CPF discoveries by tier source",
+  labelNames: ["tier"] as const,
+  registers: [register],
+});
+
+// High-value lead metrics
+export const highValueLeadsTotal = new client.Counter({
+  name: "c2s_high_value_leads_total",
+  help: "Total high-value leads detected",
+  labelNames: ["tier"] as const,
+  registers: [register],
+});
+
+// Lead quality score histogram
+export const leadQualityScore = new client.Histogram({
+  name: "c2s_lead_quality_score",
+  help: "Distribution of lead quality scores",
+  buckets: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+  registers: [register],
+});
+
 // External API metrics
 export const externalApiCalls = new client.Counter({
   name: "c2s_external_api_calls_total",
@@ -178,15 +202,44 @@ export class PrometheusService {
   /**
    * Record CPF discovery attempt
    */
-  recordCpfDiscovery(source: string, found: boolean, durationSeconds: number): void {
+  recordCpfDiscovery(
+    source: string,
+    found: boolean,
+    durationSeconds: number,
+  ): void {
     cpfDiscoveryTotal.labels(source, found ? "found" : "not_found").inc();
     cpfDiscoveryDuration.labels(source).observe(durationSeconds);
   }
 
   /**
+   * Record CPF discovery by tier (dbase, diretrix, work-api, cpf-lookup-223m-name)
+   */
+  recordCpfDiscoveryTier(tier: string): void {
+    cpfDiscoveryByTier.labels(tier).inc();
+  }
+
+  /**
+   * Record high-value lead detected
+   */
+  recordHighValueLead(tier: string): void {
+    highValueLeadsTotal.labels(tier).inc();
+  }
+
+  /**
+   * Record lead quality score
+   */
+  recordLeadQualityScore(score: number): void {
+    leadQualityScore.observe(score);
+  }
+
+  /**
    * Record external API call
    */
-  recordExternalApiCall(service: string, success: boolean, durationSeconds: number): void {
+  recordExternalApiCall(
+    service: string,
+    success: boolean,
+    durationSeconds: number,
+  ): void {
     externalApiCalls.labels(service, success ? "success" : "error").inc();
     externalApiDuration.labels(service).observe(durationSeconds);
   }
@@ -243,7 +296,12 @@ export class PrometheusService {
   /**
    * Record HTTP request
    */
-  recordHttpRequest(method: string, path: string, status: number, durationSeconds: number): void {
+  recordHttpRequest(
+    method: string,
+    path: string,
+    status: number,
+    durationSeconds: number,
+  ): void {
     // Normalize path to avoid high cardinality
     const normalizedPath = this.normalizePath(path);
     httpRequestsTotal.labels(method, normalizedPath, String(status)).inc();
@@ -256,7 +314,10 @@ export class PrometheusService {
   private normalizePath(path: string): string {
     // Replace UUIDs and IDs with placeholders
     return path
-      .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/:id")
+      .replace(
+        /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+        "/:id",
+      )
       .replace(/\/\d+/g, "/:id")
       .replace(/\/[0-9]{11}/g, "/:cpf") // CPF
       .split("?")[0]; // Remove query params

@@ -32,6 +32,13 @@ export interface HighValueCriteria {
   companyCount?: number;
   leadName?: string;
   enrichedName?: string;
+  // New criteria for improved detection
+  propertyCount?: number; // Number of properties owned
+  propertyValue?: number; // Total property value
+  hasIbviProperties?: boolean; // Found in IBVI database
+  netWorth?: number; // Patrimônio líquido
+  occupation?: string; // Occupation/profession
+  education?: string; // Education level
 }
 
 export interface HighValueResult {
@@ -45,6 +52,10 @@ export interface HighValueResult {
     companies?: number;
     familyName?: string;
     familyContext?: string;
+    properties?: number;
+    propertyValue?: number;
+    netWorth?: number;
+    occupation?: string;
   };
 }
 
@@ -68,7 +79,55 @@ const POINTS = {
   nobleNeighborhood: 15,
   multipleCompanies: 20,
   rareSurname: 10,
+  // New criteria points
+  multipleProperties: 15, // 2+ properties
+  highPropertyValue: 25, // R$2M+ in properties
+  veryHighPropertyValue: 40, // R$5M+ in properties
+  highNetWorth: 30, // R$1M+ net worth
+  veryHighNetWorth: 45, // R$5M+ net worth
+  executiveOccupation: 15, // CEO, Diretor, etc.
+  professionalOccupation: 10, // Médico, Advogado, etc.
+  graduateEducation: 5, // Pós-graduação, MBA
 };
+
+// High-value occupations
+const EXECUTIVE_OCCUPATIONS = [
+  "ceo",
+  "diretor",
+  "presidente",
+  "vice-presidente",
+  "sócio",
+  "partner",
+  "fundador",
+  "founder",
+  "empresário",
+  "empresaria",
+  "chairman",
+  "c-level",
+  "cfo",
+  "cto",
+  "coo",
+  "cmo",
+];
+
+const PROFESSIONAL_OCCUPATIONS = [
+  "médico",
+  "medico",
+  "advogado",
+  "engenheiro",
+  "arquiteto",
+  "dentista",
+  "cirurgião",
+  "cirurgiao",
+  "juiz",
+  "desembargador",
+  "promotor",
+  "procurador",
+  "investidor",
+  "gestor de fundos",
+  "banker",
+  "private banker",
+];
 
 /**
  * Check if a lead qualifies as high-value based on weighted scoring
@@ -163,6 +222,91 @@ export function detectHighValueLead(
     }
   }
 
+  // 5. Check property ownership
+  if (criteria.propertyCount && criteria.propertyCount >= 2) {
+    score += POINTS.multipleProperties;
+    reasons.push(`${criteria.propertyCount} imóveis no cadastro`);
+    details.properties = criteria.propertyCount;
+  }
+
+  // 6. Check property value
+  if (criteria.propertyValue) {
+    const valueFormatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+    }).format(criteria.propertyValue);
+
+    if (criteria.propertyValue >= 5000000) {
+      score += POINTS.veryHighPropertyValue;
+      reasons.push(`Patrimônio imobiliário: ${valueFormatted}`);
+      details.propertyValue = criteria.propertyValue;
+    } else if (criteria.propertyValue >= 2000000) {
+      score += POINTS.highPropertyValue;
+      reasons.push(`Patrimônio imobiliário: ${valueFormatted}`);
+      details.propertyValue = criteria.propertyValue;
+    }
+  }
+
+  // 7. Check net worth (patrimônio líquido)
+  if (criteria.netWorth) {
+    const worthFormatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+    }).format(criteria.netWorth);
+
+    if (criteria.netWorth >= 5000000) {
+      score += POINTS.veryHighNetWorth;
+      reasons.push(`Patrimônio líquido: ${worthFormatted}`);
+      details.netWorth = criteria.netWorth;
+    } else if (criteria.netWorth >= 1000000) {
+      score += POINTS.highNetWorth;
+      reasons.push(`Patrimônio líquido: ${worthFormatted}`);
+      details.netWorth = criteria.netWorth;
+    }
+  }
+
+  // 8. Check occupation
+  if (criteria.occupation) {
+    const occupationLower = criteria.occupation.toLowerCase();
+
+    const isExecutive = EXECUTIVE_OCCUPATIONS.some((occ) =>
+      occupationLower.includes(occ),
+    );
+    const isProfessional = PROFESSIONAL_OCCUPATIONS.some((occ) =>
+      occupationLower.includes(occ),
+    );
+
+    if (isExecutive) {
+      score += POINTS.executiveOccupation;
+      reasons.push(`Cargo executivo: ${criteria.occupation}`);
+      details.occupation = criteria.occupation;
+    } else if (isProfessional) {
+      score += POINTS.professionalOccupation;
+      reasons.push(`Profissão de alto valor: ${criteria.occupation}`);
+      details.occupation = criteria.occupation;
+    }
+  }
+
+  // 9. Check education level
+  if (criteria.education) {
+    const educationLower = criteria.education.toLowerCase();
+    const hasGraduate =
+      educationLower.includes("pós") ||
+      educationLower.includes("pos") ||
+      educationLower.includes("mestrado") ||
+      educationLower.includes("doutorado") ||
+      educationLower.includes("mba") ||
+      educationLower.includes("especialização") ||
+      educationLower.includes("especializacao");
+
+    if (hasGraduate) {
+      score += POINTS.graduateEducation;
+      // Don't add to reasons - it's a supporting factor
+    }
+  }
+
   // Determine tier based on score
   let tier: HighValueResult["tier"] = "none";
   if (score >= PLATINUM_THRESHOLD) {
@@ -200,6 +344,11 @@ export function mightBeHighValue(criteria: HighValueCriteria): boolean {
     criteria.companyCount >= MIN_COMPANIES_FOR_POINTS
   )
     return true;
+
+  // New criteria checks
+  if (criteria.propertyValue && criteria.propertyValue >= 2000000) return true;
+  if (criteria.netWorth && criteria.netWorth >= 1000000) return true;
+  if (criteria.propertyCount && criteria.propertyCount >= 3) return true;
 
   return false;
 }

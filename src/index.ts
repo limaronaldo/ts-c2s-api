@@ -7,6 +7,10 @@ import {
   startEnrichmentCron,
   stopEnrichmentCron,
 } from "./jobs/enrichment-cron";
+import {
+  startMaintenanceCron,
+  stopMaintenanceCron,
+} from "./jobs/maintenance-cron";
 import { initializeCaches } from "./utils/cache";
 import { closeRedis } from "./utils/redis-cache";
 import { rateLimit } from "./middleware/rate-limit";
@@ -100,6 +104,9 @@ if (hasFullConfig()) {
       batchSize: config.CRON_BATCH_SIZE,
       delayMs: config.CRON_DELAY_MS,
     });
+
+    // Start weekly maintenance cron (runs Sundays at 3 AM São Paulo time)
+    startMaintenanceCron();
   }
 
   // Start enrichment rate monitor
@@ -124,6 +131,7 @@ logger.info({ port, host }, `Server started on http://${host}:${port}`);
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
   stopEnrichmentCron();
+  stopMaintenanceCron();
   try {
     const { enrichmentMonitor } =
       await import("./services/enrichment-monitor.service");
@@ -140,6 +148,7 @@ process.on("SIGTERM", async () => {
 process.on("SIGINT", async () => {
   logger.info("SIGINT received, shutting down gracefully");
   stopEnrichmentCron();
+  stopMaintenanceCron();
   try {
     const { enrichmentMonitor } =
       await import("./services/enrichment-monitor.service");

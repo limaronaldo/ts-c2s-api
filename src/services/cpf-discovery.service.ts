@@ -5,6 +5,7 @@ import { contactToCpfCache } from "../utils/cache";
 import { enrichmentLogger } from "../utils/logger";
 import { getConfig } from "../config";
 import { matchNames, normalizeName } from "../utils/name-matcher";
+import { container } from "../container";
 
 /**
  * Result from CPF discovery including name match info
@@ -98,6 +99,7 @@ export class CpfDiscoveryService {
       const discoveryResult = buildResult(result, 1, "dbase");
       if (discoveryResult) {
         contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+        container.prometheus.recordCpfDiscoveryTier("dbase");
         return discoveryResult;
       }
     } catch (error) {
@@ -113,6 +115,7 @@ export class CpfDiscoveryService {
       const discoveryResult = buildResult(result, 2, "diretrix");
       if (discoveryResult) {
         contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+        container.prometheus.recordCpfDiscoveryTier("diretrix");
         return discoveryResult;
       }
     } catch (error) {
@@ -129,6 +132,7 @@ export class CpfDiscoveryService {
         const discoveryResult = buildResult(workApiResult, 3, "work-api");
         if (discoveryResult) {
           contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+          container.prometheus.recordCpfDiscoveryTier("work-api");
           return discoveryResult;
         }
       }
@@ -171,6 +175,7 @@ export class CpfDiscoveryService {
             };
 
             contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+            container.prometheus.recordCpfDiscoveryTier("cpf-lookup-223m-name");
             return discoveryResult;
           } else {
             enrichmentLogger.info(
