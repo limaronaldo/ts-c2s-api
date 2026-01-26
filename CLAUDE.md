@@ -45,7 +45,7 @@ Lead (webhook) → CPF Discovery → Work API → Storage → C2S Update → Ale
 ```
 
 1. **Webhook/Request** recebe lead (phone/email)
-2. **CPF Discovery:** Work API phone module (~90% success)
+2. **CPF Discovery:** 4-tier fallback (DBase → Diretrix → Work API → DuckDB name lookup)
 3. **Enrichment:** Work API CPF module → dados completos
 4. **Storage:** PostgreSQL (parties, contacts)
 5. **C2S Update:** Push mensagem enriquecida

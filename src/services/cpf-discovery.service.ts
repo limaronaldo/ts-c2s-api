@@ -136,6 +136,62 @@ export class CpfDiscoveryService {
       enrichmentLogger.warn({ phone, error }, "Work API phone lookup failed");
     }
 
+    // Tier 4: CPF Lookup by name (DuckDB 223M records) - only if we have a name
+    if (leadName && leadName.length >= 5) {
+      try {
+        enrichmentLogger.info(
+          { phone, leadName },
+          "Trying CPF Lookup by name as fallback",
+        );
+        const cpfLookupResult =
+          await this.cpfLookupService.findBestMatch(leadName);
+        if (cpfLookupResult) {
+          const match = matchNames(leadName, cpfLookupResult.nome_completo);
+
+          // Only accept if name match is strong (>= 0.7)
+          if (match.matches && match.score >= 0.7) {
+            enrichmentLogger.info(
+              {
+                phone,
+                leadName,
+                foundCpf: cpfLookupResult.cpf,
+                foundName: cpfLookupResult.nome_completo,
+                matchScore: match.score.toFixed(2),
+              },
+              "CPF found via name lookup (DuckDB fallback)",
+            );
+
+            const discoveryResult: CpfDiscoveryResult = {
+              cpf: cpfLookupResult.cpf,
+              foundName: cpfLookupResult.nome_completo,
+              nameMatches: true,
+              matchScore: match.score,
+              matchMethod: match.method,
+              source: "cpf-lookup-223m-name",
+            };
+
+            contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+            return discoveryResult;
+          } else {
+            enrichmentLogger.info(
+              {
+                phone,
+                leadName,
+                foundName: cpfLookupResult.nome_completo,
+                matchScore: match.score.toFixed(2),
+              },
+              "CPF Lookup found result but name match too weak, skipping",
+            );
+          }
+        }
+      } catch (error) {
+        enrichmentLogger.warn(
+          { phone, leadName, error },
+          "CPF Lookup by name failed",
+        );
+      }
+    }
+
     enrichmentLogger.info({ phone, leadName }, "CPF not found in any tier");
     return null;
   }
