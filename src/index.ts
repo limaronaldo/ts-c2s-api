@@ -16,6 +16,7 @@ import { closeRedis } from "./utils/redis-cache";
 import { rateLimit } from "./middleware/rate-limit";
 import { apiKeyAuth, getApiKeysFromEnv } from "./middleware/auth";
 import { metricsMiddleware } from "./middleware/metrics";
+import { dashboardAuth } from "./middleware/dashboard-auth";
 
 const app = new Elysia().use(errorHandler).use(healthRoute);
 
@@ -61,6 +62,9 @@ if (hasFullConfig()) {
     );
     logger.info({ keyCount: apiKeys.length }, "API key authentication enabled");
   }
+
+  // Apply Basic Auth to dashboard (RML-811)
+  app.use(dashboardAuth());
 
   // Dynamically import routes that require full config
   const { leadsRoute } = await import("./routes/leads");
