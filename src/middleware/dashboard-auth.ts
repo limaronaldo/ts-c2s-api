@@ -49,7 +49,9 @@ function verifyBasicAuth(
 
   try {
     const base64Credentials = authHeader.slice(6); // Remove "Basic "
-    const credentials = Buffer.from(base64Credentials, "base64").toString("utf-8");
+    const credentials = Buffer.from(base64Credentials, "base64").toString(
+      "utf-8",
+    );
     const [user, password] = credentials.split(":");
 
     return user === config.user && password === config.password;
@@ -89,15 +91,16 @@ export const dashboardAuth = () => {
     return new Elysia({ name: "dashboard-auth-disabled" });
   }
 
-  authLogger.info(
-    { user: config.user },
-    "Dashboard Basic Auth enabled",
-  );
+  authLogger.info({ user: config.user }, "Dashboard Basic Auth enabled");
 
   return new Elysia({ name: "dashboard-auth" }).onBeforeHandle(
-    ({ request, path }) => {
+    ({ request }) => {
+      // Get the pathname from the full URL
+      const url = new URL(request.url);
+      const pathname = url.pathname;
+
       // Only protect /dashboard routes
-      if (!path.startsWith("/dashboard")) {
+      if (!pathname.startsWith("/dashboard")) {
         return; // Continue to next handler
       }
 
@@ -105,13 +108,13 @@ export const dashboardAuth = () => {
 
       if (!verifyBasicAuth(authHeader, config)) {
         authLogger.debug(
-          { path, hasAuth: !!authHeader },
+          { pathname, hasAuth: !!authHeader },
           "Dashboard auth failed",
         );
         return createUnauthorizedResponse(config.realm || "Dashboard");
       }
 
-      authLogger.debug({ path }, "Dashboard auth successful");
+      authLogger.debug({ pathname }, "Dashboard auth successful");
     },
   );
 };
