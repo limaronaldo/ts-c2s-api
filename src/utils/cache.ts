@@ -135,9 +135,10 @@ export const recentCpfCache = new MemoryCache<boolean>({
 });
 
 // Processing leads cache - prevents concurrent processing of same lead
-export const processingLeadsCache = new MemoryCache<boolean>({
+export const processingLeadsCache = new RedisCache<boolean>({
   maxSize: 1_000,
   ttlMs: 5 * 60 * 1000, // 5 minutes
+  keyPrefix: "c2s:processing:",
 });
 
 // Contact to CPF cache - caches phone/email to CPF mapping

@@ -103,7 +103,7 @@ export class EnrichmentService {
     );
 
     // Check if already processing this lead
-    if (processingLeadsCache.has(leadId)) {
+    if (!(await processingLeadsCache.setNx(leadId, true))) {
       enrichmentLogger.warn({ leadId }, "Lead is already being processed");
       return {
         success: false,
@@ -111,9 +111,6 @@ export class EnrichmentService {
         message: "Lead is already being processed",
       };
     }
-
-    // Mark as processing
-    processingLeadsCache.set(leadId, true);
 
     try {
       // Step 1: Discover CPF
@@ -292,7 +289,7 @@ export class EnrichmentService {
       };
     } finally {
       // Remove from processing cache
-      processingLeadsCache.delete(leadId);
+      await processingLeadsCache.delete(leadId);
     }
   }
 

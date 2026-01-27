@@ -26,6 +26,7 @@ interface CacheOptions {
 export interface CacheInterface<T> {
   get(key: string): Promise<T | undefined> | T | undefined;
   set(key: string, value: T): Promise<void> | void;
+  setNx(key: string, value: T): Promise<boolean> | boolean;
   has(key: string): Promise<boolean> | boolean;
   delete(key: string): Promise<boolean> | boolean;
   clear(): Promise<void> | void;
@@ -152,6 +153,40 @@ export class RedisCache<T> implements CacheInterface<T> {
         cacheLogger.debug({ key, error: err }, "Redis set failed");
       }
     }
+  }
+
+  async setNx(key: string, value: T): Promise<boolean> {
+    // Try Redis if connected
+    if (isRedisConnected() && redisClient) {
+      try {
+        const result = await redisClient.set(
+          this.fullKey(key),
+          JSON.stringify(value),
+          "EX",
+          this.ttlSeconds,
+          "NX"
+        );
+
+        if (result === "OK") {
+          this.memoryCache.set(key, value);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        cacheLogger.debug(
+          { key, error: err },
+          "Redis setNx failed, falling back to memory"
+        );
+      }
+    }
+
+    // Fallback to in-memory cache
+    if (this.memoryCache.has(key)) {
+      return false;
+    }
+
+    this.memoryCache.set(key, value);
+    return true;
   }
 
   async has(key: string): Promise<boolean> {
