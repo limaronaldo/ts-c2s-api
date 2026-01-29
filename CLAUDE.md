@@ -71,7 +71,8 @@ container.c2sService.createMessage(leadId, msg);
 | C2SService | `services/c2s.service.ts` | Integração CRM |
 | AlertService | `services/alert.service.ts` | Slack + Email + Low rate alerts |
 | DbStorageService | `services/db-storage.service.ts` | Persistência |
-| CpfLookupService | `services/cpf-lookup.service.ts` | Busca CPF por nome (DuckDB 223M) |
+| CpfLookupService | `services/cpf-lookup.service.ts` | Busca CPF por nome (DuckDB 223M) + auto-scaling |
+| FlyScaleService | `services/fly-scale.service.ts` | Auto-scaling Fly.io machines |
 | BulkEnrichmentService | `services/bulk-enrichment.service.ts` | Enriquecimento em massa |
 | ProfileReportService | `services/profile-report.service.ts` | Relatórios MD/HTML/PDF |
 | EnrichmentMonitorService | `services/enrichment-monitor.service.ts` | Monitor de taxa (<80% alert) |
@@ -243,14 +244,15 @@ this.checkHighValueLeadAsync(leadId, name, data); // fire and forget
 ### CPF Lookup API (DuckDB - 223M CPFs)
 
 - **Endpoint:** https://cpf-lookup-api.fly.dev
-- **Uso:** Busca por nome como Tier 4 fallback, validação de CPF
+- **Uso:** Busca por nome como Tier 2 fallback, validação de CPF
 - **Endpoints:**
-  - `GET /search/:name` - Busca CPF por nome (lento, pode demorar 2+ min)
+  - `GET /search/:name` - Busca CPF por nome (~1 min com 8GB RAM)
   - `GET /cpf/:cpf` - Busca dados por CPF conhecido
   - `GET /masked/:digits` - Busca por CPF mascarado (6 dígitos do meio)
   - `GET /health` - Health check
   - `GET /stats` - Estatísticas do banco
-- **RAM:** Configurado com 4GB (shared-cpu-2x)
+- **Auto-Scaling:** Escala automaticamente para 8GB durante buscas, volta para 256MB após 5 min idle
+- **Machine ID:** `90807561f37668`
 
 ---
 
@@ -314,6 +316,11 @@ RESEND_API_KEY      # Email alerts
 # Dashboard Auth (RML-811)
 DASHBOARD_USER      # Username para login do dashboard
 DASHBOARD_PASSWORD  # Senha para login do dashboard
+
+# CPF Lookup Auto-Scaling
+FLY_API_TOKEN           # Fly.io API token for auto-scaling
+CPF_LOOKUP_MACHINE_ID   # Machine ID: 90807561f37668
+CPF_LOOKUP_AUTO_SCALE   # true/false (default: true)
 
 # Optional
 ENABLE_CRON=true    # Cron job
@@ -511,13 +518,84 @@ fly status
 
 ---
 
+## CPF Lookup Auto-Scaling (January 29, 2026)
+
+### Overview
+
+O CPF Lookup API (223M registros DuckDB) precisa de 8GB RAM para buscas eficientes, mas isso custa ~$0.05/hora. Para otimizar custos, implementamos auto-scaling que:
+
+1. **Escala UP** automaticamente antes de buscas por nome
+2. **Escala DOWN** após 5 minutos de inatividade
+
+### Como Funciona
+
+```
+1. CpfLookupService.searchByName() chamado
+   ↓
+2. FlyScaleService.scaleUp() executado automaticamente
+   - Escala para: performance-2x CPU + 8GB RAM
+   - Aguarda máquina ficar pronta (~3s)
+   ↓
+3. Busca executa na máquina escalada (~1 min)
+   ↓
+4. scheduleScaleDown() agenda timer de 5 minutos
+   ↓
+5. Após 5 min idle → auto scale-down para 256MB
+```
+
+### Configuração de Custos
+
+| Estado | CPU | RAM | Custo/hora |
+|--------|-----|-----|------------|
+| **Ativo** (durante buscas) | performance-2x | 8 GB | ~$0.05 |
+| **Idle** (5 min após uso) | shared-cpu-1x | 256 MB | ~$0.003 |
+
+**Economia:** ~94% quando idle
+
+### Arquivos
+
+| Arquivo | Função |
+|---------|--------|
+| `src/services/fly-scale.service.ts` | Serviço de auto-scaling via Fly.io API |
+| `src/services/cpf-lookup.service.ts` | Integração com auto-scaling |
+| `scripts/utils/cpf-lookup-scale.sh` | Script manual de scaling |
+
+### Variáveis de Ambiente
+
+```bash
+FLY_API_TOKEN=fm2_...           # Token da API Fly.io
+CPF_LOOKUP_MACHINE_ID=90807561f37668  # ID da máquina
+CPF_LOOKUP_AUTO_SCALE=true      # Habilitar auto-scaling
+```
+
+### Script Manual
+
+```bash
+# Escalar manualmente
+./scripts/utils/cpf-lookup-scale.sh up     # 8GB + performance CPU
+./scripts/utils/cpf-lookup-scale.sh down   # 256MB + shared CPU
+./scripts/utils/cpf-lookup-scale.sh status # Ver configuração atual
+```
+
+### Logs
+
+O auto-scaling gera logs para monitoramento:
+
+```json
+{"level":"info","module":"fly-scale","msg":"Scaling machine","memory_mb":8192}
+{"level":"info","module":"fly-scale","msg":"Machine scaled successfully"}
+{"level":"debug","module":"fly-scale","msg":"Scheduling scale-down","delayMs":300000}
+```
+
+---
+
 ## January 29, 2026 Changes
 
 ### Overview
 
-Comprehensive session to improve CPF discovery and day-to-day enrichment workflow.
+Comprehensive session to improve CPF discovery, add auto-scaling, and fix sync scripts.
 
-### CPF Discovery Priority Reorder
+### 1. CPF Discovery Priority Reorder
 
 Changed from: DBase(1) → Diretrix(2) → Work API(3) → CPF Lookup(4)
 Changed to: **Work API(1) → CPF Lookup(2) → Diretrix(3) → DBase(4)**
@@ -529,7 +607,7 @@ Changed to: **Work API(1) → CPF Lookup(2) → Diretrix(3) → DBase(4)**
 
 **File modified:** `src/services/cpf-discovery.service.ts`
 
-### Batch Endpoint Enhanced
+### 2. Batch Endpoint Enhanced
 
 Updated `/batch/enrich-direct` to use full 4-tier CPF discovery instead of just Work API.
 
@@ -543,33 +621,70 @@ Updated `/batch/enrich-direct` to use full 4-tier CPF discovery instead of just 
 
 **File modified:** `src/routes/batch.ts`
 
-### New Scripts Created
+### 3. CPF Lookup Auto-Scaling
+
+Implemented automatic scaling for CPF Lookup API to optimize costs:
+
+- **Scale UP:** 8GB RAM + performance-2x CPU before name searches
+- **Scale DOWN:** 256MB RAM + shared-cpu-1x after 5 min idle
+- **Cost savings:** ~94% when idle
+
+**Files created:**
+- `src/services/fly-scale.service.ts` - Auto-scaling service
+- `scripts/utils/cpf-lookup-scale.sh` - Manual scaling script
+
+**Files modified:**
+- `src/services/cpf-lookup.service.ts` - Integration with auto-scaling
+- `src/config/index.ts` - New config options
+
+### 4. Sync Script Fixed
+
+Fixed `scripts/export/sync-recent-leads.ts` that was failing with `synced_at` column error.
+
+**Problem:** Script expected `synced_at` column but table has `imported_at`
+**Fix:** Changed column name and added `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+
+### 5. New Scripts Created
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/analysis/fetch-recent-200.ts` | Fetch last 200 leads from C2S, identify new ones |
-| `scripts/workflows/store-new-leads-simple.ts` | Store new leads in PostgreSQL with phone normalization |
-| `scripts/debug/test-c2s-connection.ts` | Test C2S API connectivity |
+| `scripts/workflows/enrich-new-leads.ts` | Full pipeline: Fetch → Identify new → Enrich → Store → Report |
+| `scripts/export/sync-recent-leads.ts` | Sync recent leads from C2S to PostgreSQL |
+| `scripts/debug/test-enrichment-single.ts` | Test enrichment for a single lead |
+| `scripts/utils/cpf-lookup-scale.sh` | Manual CPF Lookup API scaling |
 
-### Database Schema Update
+### 6. Production Stats
 
-Added missing column to `c2s.leads`:
-```sql
-ALTER TABLE c2s.leads ADD COLUMN IF NOT EXISTS seller_id VARCHAR(100);
+Current enrichment statistics (as of January 29, 2026):
+
+| Metric | Value |
+|--------|-------|
+| Total leads | 36,186 |
+| Enriched | 30,960 |
+| Unenriched | 2,732 |
+| Enrichment rate | **91.9%** |
+| Status | Healthy |
+
+### 7. Commits
+
 ```
-
-### New Leads Synced
-
-- Fetched last 200 leads from C2S
-- Found 70 new leads not in database
-- Successfully stored all 70 new leads
-- Started enrichment process for 1,607 unenriched leads
+3539ff1 feat: add auto-scaling for CPF Lookup API
+58f37d5 feat: add CPF Lookup API scale script for cost optimization
+3af1c38 fix: use imported_at instead of synced_at in sync script
+8623f60 feat: add new enrichment and sync scripts
+```
 
 ### Deployment
 
-Deployed to Fly.io with new priority order:
+All changes deployed to Fly.io:
 ```bash
 ~/.fly/bin/fly deploy
+```
+
+**Secrets configured:**
+```bash
+fly secrets set FLY_API_TOKEN="..." -a ts-c2s-api
+fly secrets set CPF_LOOKUP_MACHINE_ID="90807561f37668" -a ts-c2s-api
 ```
 
 ---
@@ -737,5 +852,5 @@ Para normalizar: usar últimos 11 dígitos (`cpf.slice(-11)`).
 
 ---
 
-**Última atualização:** Janeiro 29, 2026  
+**Última atualização:** Janeiro 29, 2026 (Session 2 - Auto-Scaling)  
 **Mantido por:** Ronaldo Lima + Claude AI
