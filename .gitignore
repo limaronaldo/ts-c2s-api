@@ -186,3 +186,6 @@ logs/
 # Temp files
 nohup.out
 *.tmp
+
+# Generated reports
+reports/
