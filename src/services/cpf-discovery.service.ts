@@ -20,12 +20,13 @@ export interface CpfDiscoveryResult {
 }
 
 /**
- * CPF Discovery Service with 3-tier fallback:
- * 1. DBase (fastest, cheapest - requires IP whitelisting)
- * 2. Diretrix (most comprehensive - direct API calls)
- * 3. Work API (fallback - uses phone module)
+ * CPF Discovery Service with 4-tier fallback (NEW PRIORITY ORDER):
+ * 1. Work API (most comprehensive and reliable - primary source)
+ * 2. CPF Lookup API (DuckDB with 223M records - name-based fallback)
+ * 3. Diretrix (direct API calls - secondary fallback)
+ * 4. DBase (local database - final fallback, requires IP whitelisting)
  *
- * Note: Mimir was removed - we now call Diretrix directly which is more reliable
+ * Note: Priority changed to use Work API first for better enrichment rates
  */
 export class CpfDiscoveryService {
   private dbaseService: DBaseService;
@@ -51,7 +52,7 @@ export class CpfDiscoveryService {
 
     enrichmentLogger.info(
       { phone, leadName },
-      "Starting 3-tier CPF discovery by phone",
+      "Starting 4-tier CPF discovery by phone (Work API → CPF Lookup → Diretrix → DBase)",
     );
 
     // Helper to build result with name match info
@@ -93,43 +94,11 @@ export class CpfDiscoveryService {
       };
     };
 
-    // Tier 1: DBase
-    try {
-      const result = await this.dbaseService.findCpfByPhone(phone);
-      const discoveryResult = buildResult(result, 1, "dbase");
-      if (discoveryResult) {
-        contactToCpfCache.set(cacheKey, discoveryResult.cpf);
-        container.prometheus.recordCpfDiscoveryTier("dbase");
-        return discoveryResult;
-      }
-    } catch (error) {
-      enrichmentLogger.warn(
-        { phone, error },
-        "DBase lookup failed, trying next tier",
-      );
-    }
-
-    // Tier 2: Diretrix (direct API call - more reliable than Mimir)
-    try {
-      const result = await this.diretrixService.findCpfByPhone(phone);
-      const discoveryResult = buildResult(result, 2, "diretrix");
-      if (discoveryResult) {
-        contactToCpfCache.set(cacheKey, discoveryResult.cpf);
-        container.prometheus.recordCpfDiscoveryTier("diretrix");
-        return discoveryResult;
-      }
-    } catch (error) {
-      enrichmentLogger.warn(
-        { phone, error },
-        "Diretrix lookup failed, trying next tier",
-      );
-    }
-
-    // Tier 3: Work API (fallback - uses phone module)
+    // Tier 1 (New Priority): Work API - Most comprehensive and reliable
     try {
       const workApiResult = await this.findCpfByPhoneWorkApiWithName(phone);
       if (workApiResult) {
-        const discoveryResult = buildResult(workApiResult, 3, "work-api");
+        const discoveryResult = buildResult(workApiResult, 1, "work-api");
         if (discoveryResult) {
           contactToCpfCache.set(cacheKey, discoveryResult.cpf);
           container.prometheus.recordCpfDiscoveryTier("work-api");
@@ -137,15 +106,18 @@ export class CpfDiscoveryService {
         }
       }
     } catch (error) {
-      enrichmentLogger.warn({ phone, error }, "Work API phone lookup failed");
+      enrichmentLogger.warn(
+        { phone, error },
+        "Work API phone lookup failed, trying next tier",
+      );
     }
 
-    // Tier 4: CPF Lookup by name (DuckDB 223M records) - only if we have a name
+    // Tier 2 (New Priority): CPF Lookup by name (DuckDB 223M records) - only if we have a name
     if (leadName && leadName.length >= 5) {
       try {
         enrichmentLogger.info(
           { phone, leadName },
-          "Trying CPF Lookup by name as fallback",
+          "Trying CPF Lookup by name as Tier 2",
         );
         const cpfLookupResult =
           await this.cpfLookupService.findBestMatch(leadName);
@@ -162,7 +134,7 @@ export class CpfDiscoveryService {
                 foundName: cpfLookupResult.nome_completo,
                 matchScore: match.score.toFixed(2),
               },
-              "CPF found via name lookup (DuckDB fallback)",
+              "CPF found via name lookup (DuckDB Tier 2)",
             );
 
             const discoveryResult: CpfDiscoveryResult = {
@@ -192,9 +164,38 @@ export class CpfDiscoveryService {
       } catch (error) {
         enrichmentLogger.warn(
           { phone, leadName, error },
-          "CPF Lookup by name failed",
+          "CPF Lookup by name failed, trying next tier",
         );
       }
+    }
+
+    // Tier 3 (New Priority): Diretrix (direct API call)
+    try {
+      const result = await this.diretrixService.findCpfByPhone(phone);
+      const discoveryResult = buildResult(result, 3, "diretrix");
+      if (discoveryResult) {
+        contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+        container.prometheus.recordCpfDiscoveryTier("diretrix");
+        return discoveryResult;
+      }
+    } catch (error) {
+      enrichmentLogger.warn(
+        { phone, error },
+        "Diretrix lookup failed, trying next tier",
+      );
+    }
+
+    // Tier 4 (New Priority): DBase (local fallback)
+    try {
+      const result = await this.dbaseService.findCpfByPhone(phone);
+      const discoveryResult = buildResult(result, 4, "dbase");
+      if (discoveryResult) {
+        contactToCpfCache.set(cacheKey, discoveryResult.cpf);
+        container.prometheus.recordCpfDiscoveryTier("dbase");
+        return discoveryResult;
+      }
+    } catch (error) {
+      enrichmentLogger.warn({ phone, error }, "DBase lookup failed");
     }
 
     enrichmentLogger.info({ phone, leadName }, "CPF not found in any tier");
