@@ -112,8 +112,14 @@ async function ensureTable(sql: ReturnType<typeof neon>): Promise<void> {
       lead_status VARCHAR(100),
       created_at TIMESTAMP,
       updated_at TIMESTAMP,
-      synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      imported_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+  `;
+
+  // Add imported_at column if missing (for existing tables)
+  await sql`
+    ALTER TABLE c2s.leads
+    ADD COLUMN IF NOT EXISTS imported_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
   `;
 
   await sql`
@@ -158,7 +164,7 @@ async function upsertLeads(
         customer_phone, customer_phone_normalized,
         seller_name, seller_email, seller_id,
         product_description, lead_source, channel, lead_status,
-        created_at, updated_at, synced_at
+        created_at, updated_at, imported_at
       ) VALUES (
         ${data.id}, ${data.internal_id}, ${data.customer_name}, ${data.customer_email},
         ${data.customer_phone}, ${data.customer_phone_normalized},
@@ -179,7 +185,7 @@ async function upsertLeads(
         channel = EXCLUDED.channel,
         lead_status = EXCLUDED.lead_status,
         updated_at = EXCLUDED.updated_at,
-        synced_at = CURRENT_TIMESTAMP
+        imported_at = CURRENT_TIMESTAMP
     `;
     upserted++;
   }
