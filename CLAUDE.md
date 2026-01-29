@@ -112,7 +112,7 @@ ts-c2s-api/
 | `/dashboard` | GET | Dashboard HTML |
 | `/metrics` | GET | Prometheus metrics |
 | `/enrich` | POST | Enriquecer lead |
-| `/batch/enrich-direct` | POST | Batch enrichment (Work API only) |
+| `/batch/enrich-direct` | POST | Batch enrichment (4-tier CPF discovery) |
 | `/webhook/c2s` | POST | Webhook C2S |
 | `/webhook/google-ads` | POST | Webhook Google Ads |
 | `/stats` | GET | Estatísticas de enriquecimento |
@@ -254,19 +254,25 @@ this.checkHighValueLeadAsync(leadId, name, data); // fire and forget
 
 ---
 
-## CPF Discovery - 4 Tiers
+## CPF Discovery - 4 Tiers (UPDATED January 29, 2026)
 
-O serviço de descoberta de CPF usa 4 camadas de fallback:
+O serviço de descoberta de CPF usa 4 camadas de fallback com **nova ordem de prioridade**:
 
 | Tier | Serviço | Descrição | Velocidade |
 |------|---------|-----------|------------|
-| 1 | DBase | Busca local por telefone | ~100ms |
-| 2 | Diretrix | API externa por telefone | ~500ms |
-| 3 | Work API | Módulo phone | ~2s |
-| 4 | CPF Lookup (DuckDB) | Busca por nome (223M registros) | ~2min |
+| 1 | **Work API** | Módulo phone (mais confiável) | ~2s |
+| 2 | **CPF Lookup (DuckDB)** | Busca por nome (223M registros) | ~2min |
+| 3 | Diretrix | API externa por telefone | ~500ms |
+| 4 | DBase | Busca local por telefone | ~100ms |
 
-**Tier 4 só é acionado quando:**
-- Tiers 1-3 falharam
+**Mudança de Prioridade (29/01/2026):**
+- Work API movido para Tier 1 (era Tier 3)
+- CPF Lookup movido para Tier 2 (era Tier 4)
+- Diretrix movido para Tier 3 (era Tier 2)
+- DBase movido para Tier 4 (era Tier 1)
+
+**Tier 2 (CPF Lookup) só é acionado quando:**
+- Tier 1 (Work API) falhou
 - Lead tem nome com 5+ caracteres
 - Name match score >= 0.7
 
@@ -505,6 +511,69 @@ fly status
 
 ---
 
+## January 29, 2026 Changes
+
+### Overview
+
+Comprehensive session to improve CPF discovery and day-to-day enrichment workflow.
+
+### CPF Discovery Priority Reorder
+
+Changed from: DBase(1) → Diretrix(2) → Work API(3) → CPF Lookup(4)
+Changed to: **Work API(1) → CPF Lookup(2) → Diretrix(3) → DBase(4)**
+
+**Rationale:**
+- Work API is most comprehensive and reliable
+- CPF Lookup (223M records) provides excellent name-based fallback
+- Diretrix and DBase moved to fallback positions
+
+**File modified:** `src/services/cpf-discovery.service.ts`
+
+### Batch Endpoint Enhanced
+
+Updated `/batch/enrich-direct` to use full 4-tier CPF discovery instead of just Work API.
+
+**Before:** Only used Work API module
+**After:** Uses complete `cpfDiscovery.findCpf()` with all 4 tiers
+
+**New response fields:**
+- `cpfSource`: Which tier found the CPF
+- `nameMatches`: Array of potential name matches
+- `matchScore`: Confidence score for name matching
+
+**File modified:** `src/routes/batch.ts`
+
+### New Scripts Created
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/analysis/fetch-recent-200.ts` | Fetch last 200 leads from C2S, identify new ones |
+| `scripts/workflows/store-new-leads-simple.ts` | Store new leads in PostgreSQL with phone normalization |
+| `scripts/debug/test-c2s-connection.ts` | Test C2S API connectivity |
+
+### Database Schema Update
+
+Added missing column to `c2s.leads`:
+```sql
+ALTER TABLE c2s.leads ADD COLUMN IF NOT EXISTS seller_id VARCHAR(100);
+```
+
+### New Leads Synced
+
+- Fetched last 200 leads from C2S
+- Found 70 new leads not in database
+- Successfully stored all 70 new leads
+- Started enrichment process for 1,607 unenriched leads
+
+### Deployment
+
+Deployed to Fly.io with new priority order:
+```bash
+~/.fly/bin/fly deploy
+```
+
+---
+
 ## Memora (Memória Persistente)
 
 ### Configuração
@@ -536,5 +605,137 @@ memory_list_compact(tags_all=["ts-c2s-api"])
 
 ---
 
-**Última atualização:** Janeiro 26, 2026  
+## Engram (Local Memory - TF-IDF)
+
+**Repository:** https://github.com/agentic-mcp-tools/engram
+**Location:** /Users/ronaldo/Projects/FORK/engram/
+
+### What is Engram?
+
+Engram is a lightweight MCP server that provides persistent memory using **local TF-IDF embeddings** (no API required). It's a simpler, offline alternative to Memora for projects that don't need cloud sync or semantic search.
+
+### Installation
+
+**Location:** /Users/ronaldo/Projects/FORK/engram/
+**Binary:** /Users/ronaldo/Projects/FORK/engram/target/release/engram-server
+**Database:** /Users/ronaldo/.local/share/engram/memories.db
+
+### MCP Configuration
+
+**Config file:** /Users/ronaldo/.claude/mcp.json
+
+```json
+{
+  "mcpServers": {
+    "engram": {
+      "command": "/Users/ronaldo/Projects/FORK/engram/target/release/engram-server",
+      "args": [],
+      "env": {
+        "ENGRAM_DB_PATH": "/Users/ronaldo/.local/share/engram/memories.db",
+        "ENGRAM_EMBEDDING_MODEL": "tfidf",
+        "ENGRAM_CLEANUP_INTERVAL": "3600"
+      }
+    }
+  }
+}
+```
+
+### Key Features
+
+- **No API Key Required:** Uses TF-IDF embeddings by default (works offline)
+- **Local-Only Storage:** SQLite database, no cloud sync
+- **Lightweight:** ~10 MCP tools for basic memory operations
+- **Fast:** No network calls for embeddings
+
+### Embedding Models
+
+| Model | API Key Required? | Quality | Speed | Use Case |
+|-------|------------------|---------|-------|----------|
+| `tfidf` (default) | ❌ No | Good | Fast | Offline work, no API costs |
+| `openai` | ✅ Yes | Excellent | Slower | Higher quality semantic search |
+
+**To use OpenAI embeddings:**
+```json
+{
+  "env": {
+    "OPENAI_API_KEY": "sk-...",
+    "ENGRAM_EMBEDDING_MODEL": "openai"
+  }
+}
+```
+
+### MCP Tools
+
+Core tools (similar to Memora):
+- `engram_create`, `engram_get`, `engram_update`, `engram_delete`
+- `engram_list`, `engram_search`
+- `engram_stats`
+
+### When to Use Engram vs Memora
+
+| Feature | Engram | Memora |
+|---------|--------|--------|
+| **API Key** | Not required | Required (OpenAI) |
+| **Cloud Sync** | ❌ No | ✅ Yes (Cloudflare R2) |
+| **Embedding Quality** | Good (TF-IDF) | Excellent (OpenAI) |
+| **Tools Count** | ~10 | 72+ |
+| **Advanced Features** | Basic | Workspaces, Identities, Sessions, Tiering |
+| **Use Case** | Simple local memory | Production multi-agent systems |
+
+**Recommendation:**
+- Use **Engram** for personal projects, offline work, or when API costs are a concern
+- Use **Memora** for production systems, multi-machine sync, or when you need advanced features
+
+### Development
+
+```bash
+cd /Users/ronaldo/Projects/FORK/engram
+cargo build --release
+cargo test
+```
+
+---
+
+## Manual Lead Lookups
+
+### Myriam Monica Spiero (January 29, 2026)
+
+**Request:** Check enrichment for phone 11 99951-6666
+
+**Discovery Process:**
+1. Work API phone module → Found CPF in response
+2. CPF extracted: `28659500857` (from `00028659500857` format)
+3. Work API CPF module → Full enrichment data
+
+**Results:**
+
+| Field | Value |
+|-------|-------|
+| Nome | MYRIAM MONICA SPIERO |
+| CPF | 286.595.008-57 |
+| Nascimento | 09/05/1951 (73 anos) |
+| Sexo | Feminino |
+| Mãe | MARIANNE SPIERO |
+| Telefones | 13 registrados |
+| Emails | 2 registrados |
+| Endereços | 7 registrados |
+
+**Endereços Principais:**
+1. Rua Rocha Azevedo, S/N - Apto C9 - **Cerqueira César** - CEP 01410-003
+2. Rua Inocêncio Nogueira, S/N - **Cidade Jardim** - CEP 05676-030
+3. Rua Muribeca, S/N - **Cidade Jardim** - CEP 05676-080
+
+**Análise:**
+- **Perfil:** Lead de Alto Valor Potencial
+- **Indicadores:** Endereços em bairros nobres (Cerqueira César, Cidade Jardim)
+- **Limitação:** Renda não disponível na base
+- **Recomendação:** Contato prioritário - perfil geográfico indica alto poder aquisitivo
+
+**Observação sobre CPF 14 dígitos:**
+Work API retorna CPF em formato de 14 caracteres com zeros à esquerda. 
+Para normalizar: usar últimos 11 dígitos (`cpf.slice(-11)`).
+
+---
+
+**Última atualização:** Janeiro 29, 2026  
 **Mantido por:** Ronaldo Lima + Claude AI
