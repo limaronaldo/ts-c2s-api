@@ -30,6 +30,7 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
    * Direct enrichment without C2S integration - for external database leads
    *
    * Takes phone/name and returns enriched person data
+   * Uses full 4-tier CPF discovery: Work API → CPF Lookup (223M) → Diretrix → DBase
    * Does NOT store in local database or update C2S
    */
   .post(
@@ -37,45 +38,47 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
     async ({ body }) => {
       const { phone, name, email } = body;
 
-      apiLogger.info({ phone, name }, "Direct enrichment request");
+      apiLogger.info(
+        { phone, name },
+        "Direct enrichment request (4-tier CPF discovery)",
+      );
 
-      if (!phone) {
+      if (!phone && !email) {
         return {
           success: false,
-          error: "Phone is required for direct enrichment",
+          error: "Phone or email is required for direct enrichment",
         };
       }
 
       try {
-        // Step 1: CPF Discovery via Work API phone module (skip DBase/Diretrix)
-        const workApiPhoneResult =
-          await container.workApi.fetchByPhoneWithTimeout(phone);
+        // Step 1: CPF Discovery using full 4-tier fallback
+        // Priority: Work API → CPF Lookup (223M) → Diretrix → DBase
+        const cpfResult = await container.cpfDiscovery.findCpf(
+          phone || undefined,
+          email || undefined,
+          name || undefined,
+        );
 
-        let cpf: string | null = null;
-        let foundName: string | null = null;
-
-        if (workApiPhoneResult.data && workApiPhoneResult.data.length > 0) {
-          const first = workApiPhoneResult.data[0];
-          cpf = first.cpf_cnpj;
-          foundName = first.nome;
-
-          // Work API returns CPF with leading zeros (14 chars), normalize to 11
-          if (cpf && cpf.length === 14) {
-            cpf = cpf.slice(-11);
-          }
-        }
-
-        if (!cpf) {
+        if (!cpfResult) {
           return {
             success: true,
             data: {
               status: "unenriched",
-              message: "CPF not found via Work API",
+              message: "CPF not found via any discovery tier",
               phone,
+              email,
               name,
             },
           };
         }
+
+        const {
+          cpf,
+          foundName,
+          source: cpfSource,
+          nameMatches,
+          matchScore,
+        } = cpfResult;
 
         // Step 2: Work API enrichment with full CPF data
         const workResult = await container.workApi.fetchByCpfWithTimeout(cpf);
@@ -87,8 +90,10 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
               status: "partial",
               message: "CPF found but Work API enrichment failed",
               cpf,
-              cpfSource: "work-api-phone",
+              cpfSource,
               foundName,
+              nameMatches,
+              matchScore,
             },
           };
         }
@@ -100,8 +105,10 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
           data: {
             status: "completed",
             cpf: person.cpf,
-            cpfSource: "work-api",
+            cpfSource,
             foundName,
+            nameMatches,
+            matchScore,
             enrichedName: person.nome,
             birthDate: person.dataNascimento,
             gender: person.sexo,
