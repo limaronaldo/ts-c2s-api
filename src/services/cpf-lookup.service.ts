@@ -3,9 +3,13 @@
  *
  * Este serviço permite descobrir CPFs a partir do nome completo da pessoa,
  * utilizando a API cpf-lookup-api hospedada no Fly.io.
+ *
+ * Auto-scaling: Automatically scales the Fly.io machine up to 8GB RAM
+ * before searches and schedules scale-down after 5 minutes of inactivity.
  */
 
 import { getConfig } from "../config";
+import { FlyScaleService } from "./fly-scale.service";
 
 // Logger inline para evitar dependência circular
 const log = (level: string, msg: string, data?: Record<string, unknown>) => {
@@ -42,11 +46,34 @@ export interface CpfSearchResult {
 export class CpfLookupService {
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
+  private readonly flyScale: FlyScaleService;
 
   constructor() {
     const config = getConfig();
     this.baseUrl = config.CPF_LOOKUP_API_URL;
     this.timeoutMs = config.CPF_LOOKUP_TIMEOUT_MS;
+    this.flyScale = new FlyScaleService();
+  }
+
+  /**
+   * Ensure machine is scaled up before heavy operations
+   */
+  private async ensureScaledUp(): Promise<void> {
+    if (this.flyScale.isEnabled()) {
+      log("info", "Auto-scaling up before search");
+      const success = await this.flyScale.scaleUp();
+      if (success) {
+        // Wait a bit for the machine to be fully ready
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
+  }
+
+  /**
+   * Schedule scale-down after operation completes
+   */
+  private scheduleScaleDown(): void {
+    this.flyScale.scheduleScaleDown();
   }
 
   /**
@@ -90,6 +117,7 @@ export class CpfLookupService {
   /**
    * Busca CPF por nome completo
    * ATENÇÃO: Pode ser lento (full scan em 223M registros)
+   * Auto-scales the machine up before search and schedules scale-down after.
    */
   async searchByName(name: string): Promise<CpfSearchResult> {
     const normalizedName = name.trim().toUpperCase();
@@ -97,6 +125,9 @@ export class CpfLookupService {
     log("info", "Searching CPF by name", { name: normalizedName });
 
     try {
+      // Auto-scale up before heavy search operation
+      await this.ensureScaledUp();
+
       const url = `${this.baseUrl}/search/${encodeURIComponent(normalizedName)}`;
 
       const response = await fetch(url, {
@@ -104,6 +135,9 @@ export class CpfLookupService {
         headers: { "Content-Type": "application/json" },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
+
+      // Schedule scale-down after search completes
+      this.scheduleScaleDown();
 
       if (!response.ok) {
         log("warn", "Search returned non-OK status", {
@@ -130,6 +164,9 @@ export class CpfLookupService {
         results: data.results || [],
       };
     } catch (error) {
+      // Still schedule scale-down on error
+      this.scheduleScaleDown();
+
       const errorMsg = error instanceof Error ? error.message : String(error);
 
       if (errorMsg.includes("timeout") || errorMsg.includes("aborted")) {

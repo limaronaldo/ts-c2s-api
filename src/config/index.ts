@@ -130,6 +130,15 @@ const configSchema = z.object({
     .url()
     .default("https://cpf-lookup-api.fly.dev"),
   CPF_LOOKUP_TIMEOUT_MS: z.coerce.number().default(120000), // 2 minutes for name searches
+
+  // Fly.io API (for auto-scaling CPF Lookup API)
+  FLY_API_TOKEN: z.string().optional(),
+  CPF_LOOKUP_APP_NAME: z.string().default("cpf-lookup-api"),
+  CPF_LOOKUP_MACHINE_ID: z.string().optional(),
+  CPF_LOOKUP_AUTO_SCALE: z
+    .string()
+    .default("true")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
 });
 
 export type Config = z.infer<typeof configSchema>;
