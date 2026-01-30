@@ -429,23 +429,44 @@ export async function handleDiscoveryTool(
         };
       }
 
+      const birthDate = result.dataNascimento;
+      const birthYear = birthDate ? birthDate.split("/").pop() : undefined;
+      const age = birthYear ? new Date().getFullYear() - Number(birthYear) : null;
+
+      const phones =
+        result.telefones?.map((p) => ({
+          number: p.numero,
+          type: p.tipo,
+        })) || [];
+      const emails = result.emails?.map((e) => e.email) || [];
+      const addresses =
+        result.enderecos?.map((addr) => ({
+          street: addr.logradouro,
+          number: addr.numero,
+          complement: addr.complemento,
+          neighborhood: addr.bairro,
+          city: addr.cidade,
+          state: addr.uf,
+          zipCode: addr.cep,
+        })) || [];
+
       return {
         success: true,
         data: {
           cpf: result.cpf,
-          name: result.name,
-          birthDate: result.birthDate,
-          age: result.age,
-          gender: result.gender,
-          motherName: result.motherName,
-          income: result.income,
-          addresses: result.addresses?.slice(0, 5), // Limit for readability
-          phones: result.phones?.slice(0, 10),
-          emails: result.emails?.slice(0, 5),
+          name: result.nome,
+          birthDate,
+          age,
+          gender: result.sexo,
+          motherName: result.nomeMae,
+          income: result.renda ?? result.rendaPresumida,
+          addresses: addresses.slice(0, 5),
+          phones: phones.slice(0, 10),
+          emails: emails.slice(0, 5),
           // Include summary counts
-          totalAddresses: result.addresses?.length || 0,
-          totalPhones: result.phones?.length || 0,
-          totalEmails: result.emails?.length || 0,
+          totalAddresses: addresses.length,
+          totalPhones: phones.length,
+          totalEmails: emails.length,
         },
       };
     }
@@ -463,25 +484,27 @@ export async function handleDiscoveryTool(
         };
       }
 
-      const results = await container.cpfLookup.searchByName(searchName, limit);
+      const results = await container.cpfLookup.searchByName(searchName);
 
-      if (!results || results.length === 0) {
+      if (!results.success || results.results.length === 0) {
         return {
           success: false,
-          message: "No matches found for this name",
+          message: results.error || "No matches found for this name",
           searchedName: searchName,
         };
       }
 
+      const matches = results.results.slice(0, limit);
+
       return {
         success: true,
         searchedName: searchName,
-        matchCount: results.length,
-        matches: results.map((r) => ({
+        matchCount: matches.length,
+        totalMatches: results.count,
+        matches: matches.map((r) => ({
           cpf: r.cpf,
-          name: r.name,
-          score: r.score,
-          birthYear: r.birthYear,
+          name: r.nome_completo,
+          birthYear: r.data_nascimento?.slice(0, 4),
         })),
       };
     }
@@ -515,8 +538,9 @@ export async function handleDiscoveryTool(
         existsInDatabase: !!dbResult,
         basicInfo: dbResult
           ? {
-              name: dbResult.name,
-              birthYear: dbResult.birthYear,
+              name: dbResult.nome_completo,
+              birthYear: dbResult.data_nascimento?.slice(0, 4),
+              gender: dbResult.sexo,
             }
           : null,
       };

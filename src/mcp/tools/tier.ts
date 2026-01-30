@@ -163,6 +163,7 @@ export async function handleTierTool(
                 riskLevel: "medium" as const,
                 riskScore: 50,
                 alerts: [],
+                negativeNews: [],
                 recommendation: "Risk flags indicated - review before proceeding",
               }
             : undefined,

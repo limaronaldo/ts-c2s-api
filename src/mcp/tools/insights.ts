@@ -168,9 +168,10 @@ export async function handleInsightTool(
           insights: result.insights?.map((i) => ({
             type: i.type,
             title: i.title,
-            description: i.description,
+            details: i.details,
             confidence: i.confidence,
-            priority: i.priority,
+            recommendation: i.recommendation,
+            sources: i.sources,
           })),
           recommendation:
             result.tier === "platinum"
@@ -358,7 +359,6 @@ export async function handleInsightTool(
             ? {
                 detected: true,
                 country: internationalCheck.country,
-                countryCode: internationalCheck.countryCode,
               }
             : { detected: false },
         },
