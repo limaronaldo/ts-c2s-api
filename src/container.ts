@@ -14,6 +14,12 @@ import { CpfLookupService } from "./services/cpf-lookup.service";
 import { BulkEnrichmentService } from "./services/bulk-enrichment.service";
 import { ProfileReportService } from "./services/profile-report.service";
 import { LeadQualityService } from "./services/lead-quality.service";
+import { RiskDetectorService } from "./services/risk-detector.service";
+import { DomainAnalyzerService } from "./services/domain-analyzer.service";
+import { CnpjLookupService } from "./services/cnpj-lookup.service";
+import { TierCalculatorService } from "./services/tier-calculator.service";
+import { WebSearchService } from "./services/web-search.service";
+import { EnrichmentMonitorService } from "./services/enrichment-monitor.service";
 
 /**
  * Simple dependency injection container
@@ -36,6 +42,12 @@ class ServiceContainer {
   private _bulkEnrichment?: BulkEnrichmentService;
   private _profileReport?: ProfileReportService;
   private _leadQuality?: LeadQualityService;
+  private _riskDetector?: RiskDetectorService;
+  private _domainAnalyzer?: DomainAnalyzerService;
+  private _cnpjLookup?: CnpjLookupService;
+  private _tierCalculator?: TierCalculatorService;
+  private _webSearch?: WebSearchService;
+  private _enrichmentMonitor?: EnrichmentMonitorService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -149,6 +161,48 @@ class ServiceContainer {
     return this._leadQuality;
   }
 
+  get riskDetector(): RiskDetectorService {
+    if (!this._riskDetector) {
+      this._riskDetector = new RiskDetectorService();
+    }
+    return this._riskDetector;
+  }
+
+  get domainAnalyzer(): DomainAnalyzerService {
+    if (!this._domainAnalyzer) {
+      this._domainAnalyzer = new DomainAnalyzerService(this.webSearch);
+    }
+    return this._domainAnalyzer;
+  }
+
+  get cnpjLookup(): CnpjLookupService {
+    if (!this._cnpjLookup) {
+      this._cnpjLookup = new CnpjLookupService();
+    }
+    return this._cnpjLookup;
+  }
+
+  get tierCalculator(): TierCalculatorService {
+    if (!this._tierCalculator) {
+      this._tierCalculator = new TierCalculatorService();
+    }
+    return this._tierCalculator;
+  }
+
+  get webSearch(): WebSearchService {
+    if (!this._webSearch) {
+      this._webSearch = new WebSearchService();
+    }
+    return this._webSearch;
+  }
+
+  get enrichmentMonitor(): EnrichmentMonitorService {
+    if (!this._enrichmentMonitor) {
+      this._enrichmentMonitor = new EnrichmentMonitorService();
+    }
+    return this._enrichmentMonitor;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -167,6 +221,12 @@ class ServiceContainer {
     this._bulkEnrichment = undefined;
     this._profileReport = undefined;
     this._leadQuality = undefined;
+    this._riskDetector = undefined;
+    this._domainAnalyzer = undefined;
+    this._cnpjLookup = undefined;
+    this._tierCalculator = undefined;
+    this._webSearch = undefined;
+    this._enrichmentMonitor = undefined;
   }
 }
 

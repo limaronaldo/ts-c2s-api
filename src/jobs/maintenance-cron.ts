@@ -229,7 +229,7 @@ async function runMaintenance(): Promise<MaintenanceResult> {
   const config = getConfig();
 
   // Use leads-mb database for batch operations
-  const dbUrl = "postgresql://neondb_owner:npg_quYSE3haoz2e@ep-wandering-smoke-achvvk2d.sa-east-1.aws.neon.tech/neondb?sslmode=require";
+  const dbUrl = config.ENRICHMENT_DB_URL || config.DB_URL;
   const sql = postgres(dbUrl, { ssl: "require" });
 
   try {

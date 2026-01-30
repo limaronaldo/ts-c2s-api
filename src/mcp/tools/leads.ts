@@ -244,7 +244,7 @@ export async function handleLeadTool(
       const { leadId } = args as { leadId: string };
 
       try {
-        const c2sLead = await container.c2sService.getLead(leadId);
+        const c2sLead = await container.c2s.getLead(leadId);
 
         if (!c2sLead) {
           return {

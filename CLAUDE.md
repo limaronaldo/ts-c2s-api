@@ -852,7 +852,7 @@ Para normalizar: usar últimos 11 dígitos (`cpf.slice(-11)`).
 
 ---
 
-## MCP Server (RML-815) - January 29, 2026
+## MCP Server (RML-815) - Updated January 30, 2026
 
 ### Overview
 
@@ -860,80 +860,251 @@ MCP (Model Context Protocol) server that exposes ts-c2s-api's lead enrichment ca
 
 **Entry point:** `bun run mcp-server.ts`
 **SDK:** `@modelcontextprotocol/sdk` v1.4.1
+**Total Tools:** 55
 
 **Full Documentation:** See `docs/MCP_SERVER.md` for complete setup guide, troubleshooting, and development docs.
 
-### MCP Tools Available
+---
+
+### MCP Tools by Category (55 tools)
+
+#### Enrichment Tools (3)
 
 | Tool | Description |
 |------|-------------|
-| `find_and_save_person` | **NEW** Find person by phone, fetch full data, and save to PostgreSQL in one step |
 | `enrich_lead` | Enrich single lead by phone/email/name with full 4-tier CPF discovery |
 | `enrich_bulk` | Batch enrichment with rate limiting |
+| `retry_failed` | Retry failed/partial enrichments |
+
+#### Discovery Tools (5)
+
+| Tool | Description |
+|------|-------------|
+| `find_and_save_person` | Find person by phone, fetch full data, save to PostgreSQL in one step |
 | `discover_cpf` | Find CPF using 4-tier discovery (Work API → CPF Lookup → Diretrix → DBase) |
 | `lookup_cpf` | Get full data for known CPF from Work API |
 | `search_cpf_by_name` | Search 223M CPF database by name |
 | `validate_cpf` | Validate CPF format and check database existence |
+
+#### Lead Tools (3)
+
+| Tool | Description |
+|------|-------------|
 | `get_lead` | Get lead details by ID or phone |
 | `list_leads` | List leads with filters (status, seller, date range) |
 | `get_c2s_lead_status` | Get full C2S lead record including messages |
+
+#### Stats Tools (2)
+
+| Tool | Description |
+|------|-------------|
 | `get_enrichment_stats` | Enrichment statistics with grouping options |
 | `get_service_health` | Health status of all services |
-| `retry_failed` | Retry failed/partial enrichments |
 
-### find_and_save_person Tool (January 30, 2026)
+#### Property Intelligence Tools (3) - NEW January 30, 2026
 
-Complete workflow tool that discovers a person and saves to PostgreSQL in one call.
+| Tool | Description |
+|------|-------------|
+| `get_properties_by_cpf` | Find all properties owned by CPF in IBVI database (values, addresses, areas) |
+| `get_property_summary` | Aggregated portfolio (total value, count, built area) |
+| `format_property_message` | Format properties for C2S message |
 
-**Input:**
-```json
-{
-  "phone": "11993579021",  // Required
-  "name": "Larissa Rodrigues"  // Optional, helps validation
-}
-```
-
-**Output:**
+**Example output:**
 ```json
 {
   "success": true,
-  "saved": true,
-  "partyId": "f5feaf0c-6e6e-451a-add0-429d8e5ba2a4",
-  "person": {
-    "cpf": "403.752.098-24",
-    "name": "LARISSA ALVES DE SOUZA RODRIGUES",
-    "birthDate": "07/07/1991",
-    "gender": "F - FEMININO",
-    "motherName": "CARMINDA ALVES DE SOUZA RODRIGUES",
-    "income": "R$ 3.500,00"
+  "cpf": "123.456.789-01",
+  "summary": {
+    "totalProperties": 3,
+    "totalMarketValue": 2500000,
+    "totalMarketValueFormatted": "R$ 2.500.000,00",
+    "totalBuiltArea": 450
   },
-  "contacts": {
-    "phones": ["11993579021", "11981703839"],
-    "emails": ["email@example.com"],
-    "totalPhones": 7,
-    "totalEmails": 2
-  },
-  "addresses": {
-    "list": [{"street": "...", "neighborhood": "...", "city": "..."}],
-    "total": 8
-  },
-  "summary": "Saved LARISSA... with 7 phones, 2 emails, 8 addresses"
+  "properties": [...]
 }
 ```
 
-**Workflow:**
-1. Work API phone module → Find CPF associated with phone
-2. Filter out companies (LTDA, S/A, etc.) → Get person CPF
-3. Work API CPF module → Fetch full enrichment data
-4. PostgreSQL → Save party, contacts, and addresses
+#### Quality Scoring Tools (2) - NEW January 30, 2026
 
-### MCP Resources
+| Tool | Description |
+|------|-------------|
+| `score_lead_quality` | Calculate 0-100 quality score with breakdown (grade A-F) |
+| `batch_score_quality` | Score multiple leads at once with statistics |
+
+**Scoring factors (max 100):**
+- Data completeness: 30 points
+- Income: 25 points
+- Location: 15 points (bonus for noble neighborhoods)
+- Contact validity: 20 points
+- Enrichment bonus: 10 points
+
+**Example output:**
+```json
+{
+  "success": true,
+  "score": 78,
+  "grade": "B",
+  "category": "high",
+  "flags": ["noble_neighborhood"],
+  "breakdown": {
+    "dataCompleteness": { "score": 25, "max": 30 },
+    "incomeScore": { "score": 20, "max": 25 },
+    "locationScore": { "score": 15, "max": 15 },
+    "contactValidity": { "score": 15, "max": 20 },
+    "enrichmentBonus": { "score": 3, "max": 10 }
+  }
+}
+```
+
+#### Report Generation Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `generate_profile_report` | Generate report from person data (MD/HTML) |
+| `generate_report_from_cpfs` | Lookup CPFs → enrich → generate report |
+| `generate_report_pdf` | Generate PDF report (requires md-to-pdf) |
+
+**Supported formats:** Markdown, HTML, PDF
+
+#### Risk Assessment Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `assess_risk` | Full risk assessment with negative news search |
+| `quick_risk_check` | Fast check against known risks database (no web search) |
+| `analyze_text_risk` | Check any text for risk keywords |
+
+**Risk categories:** Criminal, Investigation, Financial, Reputation, Legal
+
+**Risk levels:** none, low, medium, high, critical
+
+**Example (known risk detected):**
+```json
+{
+  "success": true,
+  "name": "Fernando Oliveira Lima",
+  "hasKnownRisk": true,
+  "warning": "⚠️ RISCO CONHECIDO: CPI das Bets - Indiciado",
+  "alert": {
+    "type": "investigation",
+    "severity": "critical",
+    "title": "CPI das Bets - Indiciado",
+    "description": "Indiciado pela CPI das Bets do Senado por lavagem de dinheiro"
+  },
+  "recommendation": "NÃO PROSSEGUIR com este lead"
+}
+```
+
+#### Lead Analysis Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `analyze_lead` | Deep analysis with web search, risk detection, tier calculation |
+| `get_lead_analysis` | Retrieve cached analysis from database |
+| `check_lead_alert` | Check if lead should trigger premium/risk alert |
+
+**Tier levels:** platinum, gold, silver, bronze, risk
+
+**Analysis includes:**
+- Domain analysis (from email)
+- Web search (LinkedIn, company info)
+- Risk detection
+- Tier calculation (0-100 score)
+- Recommendation (avoid/priority/qualify/contact)
+
+**Example output:**
+```json
+{
+  "success": true,
+  "tier": "platinum",
+  "tierLabel": "Platina",
+  "score": 85,
+  "discovered": {
+    "company": "Construtora XYZ",
+    "role": "CEO",
+    "linkedIn": "https://linkedin.com/in/..."
+  },
+  "recommendation": {
+    "action": "priority",
+    "title": "Lead Premium"
+  }
+}
+```
+
+#### C2S CRM Tools (9) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `fetch_c2s_leads` | Fetch leads directly from C2S with filters |
+| `get_c2s_sellers` | List all sellers in C2S |
+| `send_c2s_message` | Add a message/note to a lead |
+| `forward_c2s_lead` | Forward a lead to another seller |
+| `search_c2s_by_phone` | Find lead by phone in C2S |
+| `search_c2s_by_email` | Find lead by email in C2S |
+| `mark_c2s_interacted` | Mark a lead as interacted |
+| `get_c2s_tags` | List available tags |
+| `add_c2s_lead_tag` | Add a tag to a lead |
+
+#### Domain Analysis Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `analyze_email_domain` | Full domain analysis from email |
+| `get_domain_trust_score` | Quick trust score for domain |
+| `identify_company_from_email` | Identify company from email domain |
+
+#### Company Intelligence Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `lookup_cnpj` | Lookup company by CNPJ |
+| `find_companies_by_name` | Find companies by owner name |
+| `analyze_company_portfolio` | Aggregate company portfolio analysis |
+
+#### Web Insights Tools (4) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `generate_web_insights` | Generate insights from web/search/surnames |
+| `detect_family_connection` | Detect family connections between names |
+| `identify_notable_surname` | Detect notable surnames |
+| `analyze_lead_name` | Comprehensive name analysis |
+
+#### Tier Classification Tools (2) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `calculate_lead_tier` | Calculate tier (platinum/gold/silver/bronze/risk) |
+| `get_tier_recommendation` | Get recommendation for a tier |
+
+#### Web Search Tools (4) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `search_web` | General web search |
+| `search_person` | Person-focused search (LinkedIn, business) |
+| `search_news` | Search news and flag negative results |
+| `find_linkedin_profile` | Find LinkedIn profile |
+
+#### Monitoring Tools (3) - NEW January 30, 2026
+
+| Tool | Description |
+|------|-------------|
+| `get_enrichment_rate` | Current enrichment rate |
+| `get_enrichment_health` | Health status vs threshold |
+| `get_enrichment_breakdown` | Breakdown by enrichment status |
+
+---
+
+### MCP Resources (3)
 
 | URI | Description |
 |-----|-------------|
 | `enrichment://stats` | Real-time enrichment metrics (last 7 days) |
 | `enrichment://health` | Service health status |
 | `enrichment://recent` | Recent leads summary |
+
+---
 
 ### Claude Code Configuration
 
@@ -958,6 +1129,8 @@ Add to `~/.claude/mcp.json`:
 }
 ```
 
+---
+
 ### File Structure
 
 ```
@@ -965,10 +1138,29 @@ ts-c2s-api/
 ├── mcp-server.ts           # Entry point
 └── src/mcp/
     ├── index.ts            # Server initialization
-    ├── tools.ts            # Tool handlers (12 tools)
-    ├── resources.ts        # Resource handlers (3 resources)
-    └── prompts.ts          # Prompt templates
+    ├── tools/
+    │   ├── index.ts        # Tool registry & routing (55 tools)
+    │   ├── enrichment.ts   # enrich_lead, enrich_bulk, retry_failed
+    │   ├── discovery.ts    # find_and_save_person, discover_cpf, etc.
+    │   ├── leads.ts        # get_lead, list_leads, get_c2s_lead_status
+    │   ├── stats.ts        # get_enrichment_stats, get_service_health
+    │   ├── property.ts     # get_properties_by_cpf, get_property_summary, format_property_message
+    │   ├── quality.ts      # score_lead_quality, batch_score_quality
+    │   ├── reports.ts      # generate_profile_report, generate_report_from_cpfs, generate_report_pdf
+    │   ├── risk.ts         # assess_risk, quick_risk_check, analyze_text_risk
+    │   ├── analysis.ts     # analyze_lead, get_lead_analysis, check_lead_alert
+    │   ├── c2s.ts          # C2S CRM tools
+    │   ├── domain.ts       # email domain analysis
+    │   ├── cnpj.ts         # company lookup
+    │   ├── insights.ts     # web insights
+    │   ├── tier.ts         # tier calculator
+    │   ├── search.ts       # web search
+    │   └── monitor.ts      # enrichment monitor
+    └── resources/
+        └── stats.ts        # Resource handlers (3 resources)
 ```
+
+---
 
 ### Example Usage
 
@@ -983,16 +1175,41 @@ After configuring, use in Claude Code:
 
 "Find CPF for Maria Santos"
 → Uses discover_cpf tool
+
+"Score the quality of this lead: João Silva, phone 11999887766, income R$15000"
+→ Uses score_lead_quality tool
+
+"Check if Fernando Oliveira Lima has any known risks"
+→ Uses quick_risk_check tool (detects CPI das Bets)
+
+"Find properties owned by CPF 12345678901"
+→ Uses get_properties_by_cpf tool
+
+"Perform deep analysis on lead ABC123"
+→ Uses analyze_lead tool with web search and tier calculation
+
+"Generate a report for these CPFs: 111.222.333-44, 555.666.777-88"
+→ Uses generate_report_from_cpfs tool
 ```
+
+---
 
 ### Linear Issues
 
+**Original MCP Implementation (January 29, 2026):**
 - **RML-815:** Create MCP server for ts-c2s-api (parent)
 - **RML-816:** Setup MCP server structure and entry point
 - **RML-817:** Implement enrichment tools
 - **RML-818:** Implement discovery tools
 - **RML-819:** Implement lead and stats tools
 - **RML-820:** Add MCP resources and configure Claude Code
+
+**MCP Feature Expansion (January 30, 2026):**
+- **RML-987:** MCP Property Intelligence Tools (3 tools)
+- **RML-988:** MCP Lead Analysis Tools (3 tools)
+- **RML-989:** MCP Risk Assessment Tools (3 tools)
+- **RML-990:** MCP Report Generation Tools (3 tools)
+- **RML-991:** MCP Quality Scoring Tools (2 tools)
 
 ---
 

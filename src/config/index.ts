@@ -10,6 +10,7 @@ const configSchema = z.object({
 
   // Database
   DB_URL: z.string().min(1, "DB_URL is required"),
+  ENRICHMENT_DB_URL: z.string().optional(),
 
   // C2S API
   C2S_TOKEN: z.string().min(1, "C2S_TOKEN is required"),

@@ -1,6 +1,6 @@
 # MCP Server Guide - ts-c2s-api
 
-**Last Updated:** January 29, 2026  
+**Last Updated:** January 30, 2026  
 **Project:** ts-c2s-api - Lead Enrichment API for MBRAS
 
 ---
@@ -22,7 +22,7 @@
 
 **MCP (Model Context Protocol)** is a standard protocol that allows AI assistants like Claude Code to interact with external tools and data sources.
 
-The ts-c2s-api MCP server exposes **12 tools** and **3 resources** that enable Claude Code to:
+The ts-c2s-api MCP server exposes **55 tools** and **3 resources** that enable Claude Code to:
 - Enrich leads with CPF discovery
 - Search the 223M CPF database
 - Query enrichment statistics
@@ -122,7 +122,28 @@ You should see `c2s-enrichment` in the list of connected servers.
 
 ## Available Tools
 
-The MCP server provides **12 tools** organized into 4 categories:
+The MCP server provides **55 tools** organized into 16 categories:
+
+### Tool Summary
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Enrichment** | `enrich_lead`, `enrich_bulk`, `retry_failed` | Lead enrichment with 4-tier CPF discovery |
+| **Discovery** | `find_and_save_person`, `discover_cpf`, `lookup_cpf`, `search_cpf_by_name`, `validate_cpf` | CPF lookup and validation |
+| **Leads** | `get_lead`, `list_leads`, `get_c2s_lead_status` | Lead management |
+| **Stats** | `get_enrichment_stats`, `get_service_health` | System and enrichment statistics |
+| **Property** | `get_properties_by_cpf`, `get_property_summary`, `format_property_message` | Property intelligence from IBVI (3.69M properties) |
+| **Quality** | `score_lead_quality`, `batch_score_quality` | Lead quality scoring (0-100 with grades A-F) |
+| **Reports** | `generate_profile_report`, `generate_report_from_cpfs`, `generate_report_pdf` | Report generation (MD/HTML/PDF) |
+| **Risk** | `assess_risk`, `quick_risk_check`, `analyze_text_risk` | Risk detection and assessment |
+| **Analysis** | `analyze_lead`, `get_lead_analysis`, `check_lead_alert` | Deep lead analysis with tier classification |
+| **C2S** | `fetch_c2s_leads`, `get_c2s_sellers`, `send_c2s_message`, `forward_c2s_lead`, `search_c2s_by_phone`, `search_c2s_by_email`, `mark_c2s_interacted`, `get_c2s_tags`, `add_c2s_lead_tag` | Direct C2S CRM operations |
+| **Domain** | `analyze_email_domain`, `get_domain_trust_score`, `identify_company_from_email` | Email domain analysis and trust scoring |
+| **CNPJ** | `lookup_cnpj`, `find_companies_by_name`, `analyze_company_portfolio` | Company lookup and portfolio analysis |
+| **Insights** | `generate_web_insights`, `detect_family_connection`, `identify_notable_surname`, `analyze_lead_name` | Web insights and surname analysis |
+| **Tier** | `calculate_lead_tier`, `get_tier_recommendation` | Tier calculation and recommendations |
+| **Search** | `search_web`, `search_person`, `search_news`, `find_linkedin_profile` | Web search utilities |
+| **Monitor** | `get_enrichment_rate`, `get_enrichment_health`, `get_enrichment_breakdown` | Enrichment monitoring and alerts |
 
 ### 1. Enrichment Tools
 
@@ -404,6 +425,487 @@ Retry failed/partial enrichments.
 }
 ```
 
+### 5. Property Intelligence Tools
+
+Access property data from IBVI database (3.69M properties).
+
+#### `get_properties_by_cpf`
+
+Find all properties owned by a CPF.
+
+**Input:**
+```json
+{
+  "cpf": "12345678901"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "cpf": "12345678901",
+  "ownerName": "JOÃO SILVA",
+  "summary": {
+    "totalProperties": 3,
+    "totalMarketValue": 2500000,
+    "totalBuiltArea": 450
+  },
+  "properties": [
+    {
+      "address": "Rua Augusta, 1500 - Consolação",
+      "type": "Apartamento",
+      "builtArea": 150,
+      "marketValue": 1200000
+    }
+  ]
+}
+```
+
+#### `get_property_summary`
+
+Get aggregated property portfolio for a CPF.
+
+**Input:**
+```json
+{
+  "cpf": "12345678901"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "cpf": "12345678901",
+  "ownerName": "JOÃO SILVA",
+  "portfolio": {
+    "totalProperties": 3,
+    "totalMarketValue": 2500000,
+    "totalBuiltArea": 450,
+    "avgPropertyValue": 833333,
+    "propertyTypes": {
+      "Apartamento": 2,
+      "Casa": 1
+    },
+    "neighborhoods": ["Consolação", "Jardins"]
+  }
+}
+```
+
+#### `format_property_message`
+
+Format property data as a message for C2S.
+
+**Input:**
+```json
+{
+  "cpf": "12345678901",
+  "format": "detailed"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "message": "🏠 Patrimônio Imobiliário - JOÃO SILVA\n\n📊 Resumo:\n- 3 imóveis cadastrados\n- Valor total: R$ 2.500.000\n- Área construída: 450 m²\n\n📍 Imóveis:\n1. Rua Augusta, 1500 - Consolação\n   Apartamento - 150 m² - R$ 1.200.000\n..."
+}
+```
+
+### 6. Quality Scoring Tools
+
+Score leads based on data completeness, income, and other factors.
+
+#### `score_lead_quality`
+
+Calculate quality score (0-100) with breakdown.
+
+**Input:**
+```json
+{
+  "cpf": "12345678901",
+  "name": "João Silva",
+  "phone": "11999887766",
+  "email": "joao@empresa.com.br",
+  "income": 15000,
+  "neighborhood": "Jardins"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "score": 85,
+  "grade": "A",
+  "breakdown": {
+    "dataCompleteness": 28,
+    "incomeScore": 25,
+    "locationScore": 15,
+    "contactValidity": 17,
+    "enrichmentBonus": 0
+  },
+  "maxScores": {
+    "dataCompleteness": 30,
+    "incomeScore": 25,
+    "locationScore": 15,
+    "contactValidity": 20,
+    "enrichmentBonus": 10
+  },
+  "recommendation": "High quality lead - prioritize contact"
+}
+```
+
+**Grading Scale:**
+- **A (90-100):** Excellent quality
+- **B (75-89):** Good quality
+- **C (60-74):** Average quality
+- **D (40-59):** Below average
+- **F (0-39):** Poor quality
+
+#### `batch_score_quality`
+
+Score multiple leads at once.
+
+**Input:**
+```json
+{
+  "leads": [
+    {"cpf": "12345678901", "name": "João Silva", "income": 15000},
+    {"cpf": "98765432109", "name": "Maria Santos", "income": 8000}
+  ]
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "total": 2,
+  "results": [
+    {"cpf": "12345678901", "score": 85, "grade": "A"},
+    {"cpf": "98765432109", "score": 72, "grade": "C"}
+  ],
+  "summary": {
+    "avgScore": 78.5,
+    "distribution": {"A": 1, "C": 1}
+  }
+}
+```
+
+### 7. Report Generation Tools
+
+Generate profile reports in various formats.
+
+#### `generate_profile_report`
+
+Generate report from person data.
+
+**Input:**
+```json
+{
+  "personData": {
+    "cpf": "12345678901",
+    "nome": "João Silva",
+    "nascimento": "01/01/1980",
+    "renda": 15000,
+    "enderecos": [...],
+    "telefones": [...]
+  },
+  "format": "markdown"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "format": "markdown",
+  "content": "# Perfil: JOÃO SILVA\n\n## Dados Pessoais\n- **CPF:** 123.456.789-01\n- **Nascimento:** 01/01/1980\n- **Renda Estimada:** R$ 15.000/mês\n\n## Endereços\n...",
+  "wordCount": 450
+}
+```
+
+**Supported formats:** `markdown`, `html`, `text`
+
+#### `generate_report_from_cpfs`
+
+Lookup CPFs, enrich, and generate consolidated report.
+
+**Input:**
+```json
+{
+  "cpfs": ["12345678901", "98765432109"],
+  "format": "html",
+  "includeProperties": true
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "format": "html",
+  "content": "<html><head>...</head><body>...</body></html>",
+  "profiles": [
+    {"cpf": "12345678901", "name": "JOÃO SILVA", "enriched": true},
+    {"cpf": "98765432109", "name": "MARIA SANTOS", "enriched": true}
+  ]
+}
+```
+
+#### `generate_report_pdf`
+
+Generate PDF report (returns base64).
+
+**Input:**
+```json
+{
+  "cpfs": ["12345678901"],
+  "template": "detailed"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "format": "pdf",
+  "base64": "JVBERi0xLjQKJeLjz9MKMSAwIG9iago...",
+  "filename": "profile_12345678901_20260130.pdf",
+  "sizeKb": 125
+}
+```
+
+### 8. Risk Assessment Tools
+
+Detect and assess risks associated with leads.
+
+#### `assess_risk`
+
+Full risk assessment with negative news search.
+
+**Input:**
+```json
+{
+  "name": "Fernando Oliveira Lima",
+  "cpf": "12345678901",
+  "searchWeb": true
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "riskScore": 85,
+  "riskLevel": "critical",
+  "alerts": [
+    {
+      "type": "investigation",
+      "severity": "critical",
+      "title": "CPI das Bets",
+      "description": "Investigado na CPI das Bets por lavagem de dinheiro",
+      "source": "known_risks_database"
+    }
+  ],
+  "categories": {
+    "criminal": 0,
+    "investigation": 85,
+    "financial": 0,
+    "reputation": 0,
+    "legal": 0
+  },
+  "recommendation": "RISCO CRÍTICO: NÃO PROSSEGUIR - Investigado em CPI"
+}
+```
+
+**Risk Levels:**
+- **critical (80-100):** Do not proceed
+- **high (60-79):** Proceed with extreme caution
+- **medium (40-59):** Review carefully
+- **low (20-39):** Minor concerns
+- **none (0-19):** No significant risks
+
+#### `quick_risk_check`
+
+Fast check against known risks (no web search).
+
+**Input:**
+```json
+{
+  "name": "Fernando Oliveira Lima"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "hasKnownRisks": true,
+  "riskLevel": "critical",
+  "matchedRisks": [
+    {
+      "name": "Fernando Oliveira Lima",
+      "type": "investigation",
+      "description": "CPI das Bets - investigado por lavagem de dinheiro"
+    }
+  ]
+}
+```
+
+#### `analyze_text_risk`
+
+Check any text for risk keywords.
+
+**Input:**
+```json
+{
+  "text": "Cliente mencionou que foi indiciado por fraude bancária em 2023"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "riskScore": 75,
+  "detectedKeywords": [
+    {"keyword": "indiciado", "category": "legal", "weight": 30},
+    {"keyword": "fraude", "category": "criminal", "weight": 40}
+  ],
+  "categories": {
+    "criminal": 40,
+    "legal": 30
+  }
+}
+```
+
+### 9. Lead Analysis Tools
+
+Deep analysis with tier classification and recommendations.
+
+#### `analyze_lead`
+
+Comprehensive lead analysis with web search.
+
+**Input:**
+```json
+{
+  "name": "Carlos Eduardo Medeiros",
+  "cpf": "12345678901",
+  "email": "carlos@construtora.com.br",
+  "phone": "11999887766",
+  "enableWebSearch": true
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "tier": "platinum",
+  "score": 92,
+  "discovered": {
+    "company": "Construtora Medeiros Ltda",
+    "role": "Sócio-Diretor",
+    "linkedIn": "https://linkedin.com/in/carlosmedeiros",
+    "companyRevenue": "R$ 50M+",
+    "employees": 120
+  },
+  "portfolio": {
+    "properties": 5,
+    "totalValue": 8500000
+  },
+  "risk": {
+    "level": "none",
+    "score": 5
+  },
+  "recommendation": {
+    "action": "priority",
+    "title": "Lead Premium - Alta Prioridade",
+    "message": "Sócio de construtora com patrimônio significativo. Potencial comprador de imóveis de alto padrão.",
+    "suggestedProducts": ["Imóveis acima de R$ 2M", "Investimentos imobiliários"]
+  }
+}
+```
+
+**Tier Classification:**
+- **platinum (90-100):** Ultra-high value, priority contact
+- **gold (75-89):** High value, fast track
+- **silver (50-74):** Standard quality
+- **bronze (25-49):** Basic lead
+- **risk (<25 or has critical alerts):** Do not pursue
+
+#### `get_lead_analysis`
+
+Retrieve cached analysis from database.
+
+**Input:**
+```json
+{
+  "cpf": "12345678901"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "cached": true,
+  "analyzedAt": "2026-01-29T15:30:00Z",
+  "analysis": {
+    "tier": "platinum",
+    "score": 92,
+    "discovered": {...},
+    "recommendation": {...}
+  }
+}
+```
+
+#### `check_lead_alert`
+
+Check if lead triggers premium or risk alerts.
+
+**Input:**
+```json
+{
+  "name": "João Safra",
+  "income": 50000,
+  "neighborhood": "Jardins"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "hasAlerts": true,
+  "alerts": [
+    {
+      "type": "high_value",
+      "severity": "info",
+      "reason": "notable_surname",
+      "details": "Sobrenome Safra identificado - família de alta relevância no mercado financeiro"
+    },
+    {
+      "type": "high_value",
+      "severity": "info",
+      "reason": "premium_neighborhood",
+      "details": "Endereço em bairro premium: Jardins"
+    },
+    {
+      "type": "high_value",
+      "severity": "info",
+      "reason": "high_income",
+      "details": "Renda acima de R$ 30.000/mês"
+    }
+  ],
+  "recommendation": "Lead de alto valor - contato prioritário recomendado"
+}
+```
+
 ---
 
 ## Available Resources
@@ -647,15 +1149,38 @@ MCP server logs are visible in Claude Code's developer console:
 ts-c2s-api/
 ├── mcp-server.ts           # Entry point
 └── src/mcp/
-    ├── index.ts            # Server initialization
-    ├── tools.ts            # Tool handlers (12 tools)
-    ├── resources.ts        # Resource handlers (3 resources)
-    └── prompts.ts          # Prompt templates (future)
+    ├── README.md           # MCP module documentation
+    ├── index.ts            # Main exports
+    ├── server.ts           # Server setup and handlers
+    ├── types.ts            # Type definitions
+    ├── tools/              # Tool implementations (55 tools)
+    │   ├── index.ts        # Tool routing
+    │   ├── enrichment.ts   # Enrichment (3)
+    │   ├── discovery.ts    # Discovery (5)
+    │   ├── leads.ts        # Lead management (3)
+    │   ├── stats.ts        # Statistics (2)
+    │   ├── property.ts     # Property intelligence (3)
+    │   ├── quality.ts      # Quality scoring (2)
+    │   ├── reports.ts      # Report generation (3)
+    │   ├── risk.ts         # Risk assessment (3)
+    │   ├── analysis.ts     # Lead analysis (3)
+    │   ├── c2s.ts          # C2S CRM integration (9)
+    │   ├── domain.ts       # Domain analysis (3)
+    │   ├── cnpj.ts         # CNPJ lookup (3)
+    │   ├── insights.ts     # Web insights (4)
+    │   ├── tier.ts         # Tier calculator (2)
+    │   ├── search.ts       # Web search (4)
+    │   └── monitor.ts      # Enrichment monitor (3)
+    ├── resources/          # Resource implementations (3)
+    │   ├── index.ts        # Resource routing
+    │   └── stats.ts        # Statistics resources
+    └── prompts/            # Prompt templates (future)
+        └── index.ts        # Prompt definitions
 ```
 
 ### Adding New Tools
 
-1. **Define tool in `src/mcp/tools.ts`:**
+1. **Define tool in `src/mcp/tools/<category>.ts`:**
 
 ```typescript
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -874,12 +1399,22 @@ Store credentials in `~/.claude/mcp.json`, which is:
 
 ## Linear Issues
 
+### Phase 0: Initial MCP Server (January 29, 2026)
 - **RML-815:** Create MCP server for ts-c2s-api (parent)
 - **RML-816:** Setup MCP server structure and entry point ✅
 - **RML-817:** Implement enrichment tools ✅
 - **RML-818:** Implement discovery tools ✅
 - **RML-819:** Implement lead and stats tools ✅
 - **RML-820:** Add MCP resources and configure Claude Code ✅
+
+### Phase 1: Feature Expansion (January 30, 2026)
+- **RML-987:** Property Intelligence Tools (3 tools) ✅
+- **RML-988:** Quality Scoring Tools (2 tools) ✅
+- **RML-989:** Report Generation Tools (3 tools) ✅
+- **RML-990:** Risk Assessment Tools (3 tools) ✅
+- **RML-991:** Lead Analysis Tools (3 tools) ✅
+
+**Total:** **55 tools**
 
 ---
 
@@ -892,6 +1427,6 @@ Store credentials in `~/.claude/mcp.json`, which is:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** January 29, 2026  
+**Document Version:** 2.0  
+**Last Updated:** January 30, 2026  
 **Maintained By:** Ronaldo Lima + Claude AI

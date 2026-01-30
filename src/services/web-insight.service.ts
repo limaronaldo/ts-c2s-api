@@ -95,7 +95,12 @@ export class WebInsightService {
   /**
    * Gera e envia insights para um lead
    */
-  async generateAndSendInsights(data: LeadInsightData): Promise<InsightResult> {
+  async generateAndSendInsights(
+    data: LeadInsightData,
+    options?: { sendToC2S?: boolean },
+  ): Promise<InsightResult> {
+    const shouldSend = options?.sendToC2S ?? true;
+
     if (!this.enabled) {
       return {
         generated: false,
@@ -190,6 +195,16 @@ export class WebInsightService {
       };
 
       const message = formatInsightMessage(qualifiedInsights, context);
+
+      if (!shouldSend) {
+        return {
+          generated: true,
+          insightCount: qualifiedInsights.length,
+          messageSent: false,
+          tier: scoreResult.tier,
+          insights: qualifiedInsights,
+        };
+      }
 
       // Enviar ao C2S
       try {
