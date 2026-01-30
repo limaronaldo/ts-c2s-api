@@ -852,5 +852,243 @@ Para normalizar: usar últimos 11 dígitos (`cpf.slice(-11)`).
 
 ---
 
-**Última atualização:** Janeiro 29, 2026 (Session 2 - Auto-Scaling)  
+## MCP Server (RML-815) - January 29, 2026
+
+### Overview
+
+MCP (Model Context Protocol) server that exposes ts-c2s-api's lead enrichment capabilities to AI assistants like Claude Code.
+
+**Entry point:** `bun run mcp-server.ts`
+**SDK:** `@modelcontextprotocol/sdk` v1.4.1
+
+**Full Documentation:** See `docs/MCP_SERVER.md` for complete setup guide, troubleshooting, and development docs.
+
+### MCP Tools Available
+
+| Tool | Description |
+|------|-------------|
+| `find_and_save_person` | **NEW** Find person by phone, fetch full data, and save to PostgreSQL in one step |
+| `enrich_lead` | Enrich single lead by phone/email/name with full 4-tier CPF discovery |
+| `enrich_bulk` | Batch enrichment with rate limiting |
+| `discover_cpf` | Find CPF using 4-tier discovery (Work API → CPF Lookup → Diretrix → DBase) |
+| `lookup_cpf` | Get full data for known CPF from Work API |
+| `search_cpf_by_name` | Search 223M CPF database by name |
+| `validate_cpf` | Validate CPF format and check database existence |
+| `get_lead` | Get lead details by ID or phone |
+| `list_leads` | List leads with filters (status, seller, date range) |
+| `get_c2s_lead_status` | Get full C2S lead record including messages |
+| `get_enrichment_stats` | Enrichment statistics with grouping options |
+| `get_service_health` | Health status of all services |
+| `retry_failed` | Retry failed/partial enrichments |
+
+### find_and_save_person Tool (January 30, 2026)
+
+Complete workflow tool that discovers a person and saves to PostgreSQL in one call.
+
+**Input:**
+```json
+{
+  "phone": "11993579021",  // Required
+  "name": "Larissa Rodrigues"  // Optional, helps validation
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "saved": true,
+  "partyId": "f5feaf0c-6e6e-451a-add0-429d8e5ba2a4",
+  "person": {
+    "cpf": "403.752.098-24",
+    "name": "LARISSA ALVES DE SOUZA RODRIGUES",
+    "birthDate": "07/07/1991",
+    "gender": "F - FEMININO",
+    "motherName": "CARMINDA ALVES DE SOUZA RODRIGUES",
+    "income": "R$ 3.500,00"
+  },
+  "contacts": {
+    "phones": ["11993579021", "11981703839"],
+    "emails": ["email@example.com"],
+    "totalPhones": 7,
+    "totalEmails": 2
+  },
+  "addresses": {
+    "list": [{"street": "...", "neighborhood": "...", "city": "..."}],
+    "total": 8
+  },
+  "summary": "Saved LARISSA... with 7 phones, 2 emails, 8 addresses"
+}
+```
+
+**Workflow:**
+1. Work API phone module → Find CPF associated with phone
+2. Filter out companies (LTDA, S/A, etc.) → Get person CPF
+3. Work API CPF module → Fetch full enrichment data
+4. PostgreSQL → Save party, contacts, and addresses
+
+### MCP Resources
+
+| URI | Description |
+|-----|-------------|
+| `enrichment://stats` | Real-time enrichment metrics (last 7 days) |
+| `enrichment://health` | Service health status |
+| `enrichment://recent` | Recent leads summary |
+
+### Claude Code Configuration
+
+Add to `~/.claude/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "c2s-enrichment": {
+      "command": "bun",
+      "args": ["run", "mcp-server.ts"],
+      "cwd": "/Users/ronaldo/Projects/MBRAS/tools/ts-c2s-api",
+      "env": {
+        "DB_URL": "postgresql://...",
+        "C2S_TOKEN": "...",
+        "C2S_URL": "https://api.contact2sale.com",
+        "WORK_API": "...",
+        "CPF_LOOKUP_API_URL": "https://cpf-lookup-api.fly.dev"
+      }
+    }
+  }
+}
+```
+
+### File Structure
+
+```
+ts-c2s-api/
+├── mcp-server.ts           # Entry point
+└── src/mcp/
+    ├── index.ts            # Server initialization
+    ├── tools.ts            # Tool handlers (12 tools)
+    ├── resources.ts        # Resource handlers (3 resources)
+    └── prompts.ts          # Prompt templates
+```
+
+### Example Usage
+
+After configuring, use in Claude Code:
+
+```
+"Check enrichment stats for the last 7 days"
+→ Uses get_enrichment_stats tool
+
+"Enrich this lead: phone 11999887766, name João Silva"
+→ Uses enrich_lead tool with 4-tier CPF discovery
+
+"Find CPF for Maria Santos"
+→ Uses discover_cpf tool
+```
+
+### Linear Issues
+
+- **RML-815:** Create MCP server for ts-c2s-api (parent)
+- **RML-816:** Setup MCP server structure and entry point
+- **RML-817:** Implement enrichment tools
+- **RML-818:** Implement discovery tools
+- **RML-819:** Implement lead and stats tools
+- **RML-820:** Add MCP resources and configure Claude Code
+
+---
+
+## C2S Leads Auto-Save (January 29, 2026)
+
+### Overview
+
+All C2S webhook leads are now automatically saved to PostgreSQL on arrival, BEFORE enrichment starts. This ensures no lead is lost even if enrichment fails.
+
+### Database Table: `analytics.c2s_leads`
+
+```sql
+CREATE TABLE analytics.c2s_leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id VARCHAR(255) UNIQUE NOT NULL,
+  internal_id INTEGER,
+  customer_name VARCHAR(255),
+  customer_email VARCHAR(255),
+  customer_phone VARCHAR(50),
+  customer_phone_normalized VARCHAR(20),
+  seller_id VARCHAR(100),
+  seller_name VARCHAR(255),
+  seller_email VARCHAR(255),
+  lead_source VARCHAR(255),
+  lead_status VARCHAR(100),
+  product_description VARCHAR(500),
+  hook_action VARCHAR(50),
+  raw_payload JSONB,
+  enrichment_status VARCHAR(20) DEFAULT 'pending',
+  party_id UUID REFERENCES analytics.parties(id),
+  cpf VARCHAR(14),
+  enriched_at TIMESTAMP,
+  retry_count INTEGER DEFAULT 0,
+  last_retry_at TIMESTAMP,
+  last_error TEXT,
+  c2s_created_at TIMESTAMP,
+  c2s_updated_at TIMESTAMP,
+  received_at TIMESTAMP DEFAULT NOW() NOT NULL,
+  updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+```
+
+### Enrichment Status Flow
+
+```
+pending → processing → completed (full enrichment)
+                    → partial (CPF found, Work API timeout)
+                    → failed (max retries exceeded)
+```
+
+### Webhook Flow
+
+```
+1. C2S webhook received (/webhook/c2s)
+   ↓
+2. Lead stored in analytics.c2s_leads (status: pending)
+   ↓
+3. Enrichment queued asynchronously (status: processing)
+   ↓
+4. Enrichment completes
+   - Success → status: completed, cpf + party_id set
+   - Partial → status: partial, cpf set
+   - Error → retry_count incremented, last_error set
+```
+
+### DbStorageService Methods
+
+```typescript
+// Store lead on arrival
+container.dbStorage.upsertC2SLead(data)
+
+// Find by lead ID
+container.dbStorage.findC2SLeadByLeadId(leadId)
+
+// Update enrichment status
+container.dbStorage.updateC2SLeadEnrichmentStatus(leadId, status, partyId?, cpf?, error?)
+
+// Increment retry count on error
+container.dbStorage.incrementC2SLeadRetryCount(leadId, error)
+
+// Get leads by status for retry
+container.dbStorage.getC2SLeadsByStatus(['failed', 'partial'], limit)
+
+// Get statistics
+container.dbStorage.getC2SLeadStats(dateFrom?, dateTo?)
+```
+
+### Benefits
+
+1. **No lead loss:** Leads saved immediately, even if enrichment fails
+2. **Retry tracking:** Failed leads can be retried with error history
+3. **Full audit trail:** Raw payload preserved for debugging
+4. **Seller tracking:** Seller info saved for reporting
+5. **Status monitoring:** Query leads by enrichment status
+
+---
+
+**Última atualização:** Janeiro 29, 2026 (Session 3 - MCP Server + Auto-Save)  
 **Mantido por:** Ronaldo Lima + Claude AI

@@ -158,6 +158,66 @@ export const googleAdsLeads = analyticsSchema.table(
   }),
 );
 
+// C2S Leads table - stores ALL leads from C2S webhook on arrival
+// This ensures no lead is lost even if enrichment fails
+export const c2sLeads = analyticsSchema.table(
+  "c2s_leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    // C2S identifiers
+    leadId: varchar("lead_id", { length: 255 }).unique().notNull(),
+    internalId: integer("internal_id"),
+    // Customer info (stored on arrival)
+    customerName: varchar("customer_name", { length: 255 }),
+    customerEmail: varchar("customer_email", { length: 255 }),
+    customerPhone: varchar("customer_phone", { length: 50 }),
+    customerPhoneNormalized: varchar("customer_phone_normalized", {
+      length: 20,
+    }),
+    // Seller info
+    sellerId: varchar("seller_id", { length: 100 }),
+    sellerName: varchar("seller_name", { length: 255 }),
+    sellerEmail: varchar("seller_email", { length: 255 }),
+    // Lead metadata
+    leadSource: varchar("lead_source", { length: 255 }),
+    leadStatus: varchar("lead_status", { length: 100 }),
+    productDescription: varchar("product_description", { length: 500 }),
+    // Webhook info
+    hookAction: varchar("hook_action", { length: 50 }),
+    rawPayload: jsonb("raw_payload"),
+    // Enrichment tracking
+    enrichmentStatus: varchar("enrichment_status", { length: 20 }).default(
+      "pending",
+    ),
+    partyId: uuid("party_id").references(() => parties.id),
+    cpf: varchar("cpf", { length: 14 }),
+    enrichedAt: timestamp("enriched_at"),
+    // Retry tracking
+    retryCount: integer("retry_count").default(0),
+    lastRetryAt: timestamp("last_retry_at"),
+    lastError: text("last_error"),
+    // Timestamps from C2S
+    c2sCreatedAt: timestamp("c2s_created_at"),
+    c2sUpdatedAt: timestamp("c2s_updated_at"),
+    // Our timestamps
+    receivedAt: timestamp("received_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    leadIdIdx: uniqueIndex("idx_c2s_leads_lead_id").on(table.leadId),
+    phoneIdx: index("idx_c2s_leads_phone").on(table.customerPhoneNormalized),
+    emailIdx: index("idx_c2s_leads_email").on(table.customerEmail),
+    statusIdx: index("idx_c2s_leads_status").on(table.enrichmentStatus),
+    partyIdx: index("idx_c2s_leads_party").on(table.partyId),
+    receivedAtIdx: index("idx_c2s_leads_received_at").on(table.receivedAt),
+    retryIdx: index("idx_c2s_leads_retry").on(
+      table.enrichmentStatus,
+      table.retryCount,
+      table.lastRetryAt,
+    ),
+  }),
+);
+
 // Lead analyses table (RML-872)
 // Stores deep analysis results for leads including web search findings and tier scoring
 export const leadAnalyses = analyticsSchema.table(
@@ -220,5 +280,7 @@ export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
 export type GoogleAdsLead = typeof googleAdsLeads.$inferSelect;
 export type NewGoogleAdsLead = typeof googleAdsLeads.$inferInsert;
+export type C2SLead = typeof c2sLeads.$inferSelect;
+export type NewC2SLead = typeof c2sLeads.$inferInsert;
 export type LeadAnalysis = typeof leadAnalyses.$inferSelect;
 export type NewLeadAnalysis = typeof leadAnalyses.$inferInsert;

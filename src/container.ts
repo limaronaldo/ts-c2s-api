@@ -171,3 +171,6 @@ class ServiceContainer {
 }
 
 export const container = new ServiceContainer();
+
+// Export type for MCP server
+export type { ServiceContainer };

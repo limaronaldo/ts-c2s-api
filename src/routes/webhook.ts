@@ -141,6 +141,7 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
 
       // Extract lead data
       const customer = lead.attributes?.customer;
+      const seller = lead.attributes?.seller;
       const leadId = lead.id;
       const name = customer?.name || "Unknown";
       const phone = customer?.phone?.replace(/\D/g, "") || undefined;
@@ -148,12 +149,53 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
       const source = lead.attributes?.lead_source?.name || "c2s_webhook";
       const campaignName = lead.attributes?.product?.description;
 
+      // Store lead in database IMMEDIATELY on arrival (before enrichment)
+      // This ensures no lead is lost even if enrichment fails
+      try {
+        await container.dbStorage.upsertC2SLead({
+          leadId,
+          internalId: lead.internal_id,
+          customerName: name,
+          customerEmail: email,
+          customerPhone: customer?.phone,
+          customerPhoneNormalized: phone,
+          sellerId: seller?.id,
+          sellerName: seller?.name,
+          sellerEmail: seller?.email,
+          leadSource: source,
+          leadStatus: lead.attributes?.lead_status?.name,
+          productDescription: campaignName,
+          hookAction: hook_action,
+          rawPayload: payload as unknown as Record<string, unknown>,
+          enrichmentStatus: "pending",
+          c2sCreatedAt: lead.attributes?.created_at
+            ? new Date(lead.attributes.created_at)
+            : undefined,
+          c2sUpdatedAt: lead.attributes?.updated_at
+            ? new Date(lead.attributes.updated_at)
+            : undefined,
+        });
+        webhookLogger.info({ leadId }, "C2S lead stored in database");
+      } catch (storeErr) {
+        webhookLogger.error(
+          { leadId, error: storeErr },
+          "Failed to store C2S lead in database (continuing with enrichment)",
+        );
+        // Don't fail the webhook - continue with enrichment attempt
+      }
+
       try {
         switch (hook_action) {
           case "on_create_lead":
             // Queue enrichment asynchronously (don't block webhook response)
             setImmediate(async () => {
               try {
+                // Update status to processing
+                await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                  leadId,
+                  "processing",
+                );
+
                 webhookLogger.info(
                   { leadId, name, phone },
                   "Starting async enrichment for new C2S lead",
@@ -168,11 +210,35 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
                   campaignName,
                 });
 
+                // Update enrichment status based on result
+                if (result.enriched) {
+                  await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                    leadId,
+                    "completed",
+                    result.partyId,
+                    result.cpf,
+                  );
+                } else {
+                  await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                    leadId,
+                    "partial",
+                    result.partyId,
+                    result.cpf,
+                  );
+                }
+
                 webhookLogger.info(
                   { leadId, enriched: result.enriched, cpf: result.cpf },
                   "C2S lead enrichment completed",
                 );
               } catch (err) {
+                // Update status to failed and increment retry count
+                const errorMsg =
+                  err instanceof Error ? err.message : "Unknown error";
+                await container.dbStorage.incrementC2SLeadRetryCount(
+                  leadId,
+                  errorMsg,
+                );
                 webhookLogger.error(
                   { leadId, error: err },
                   "C2S lead enrichment failed",
@@ -182,8 +248,7 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
             break;
 
           case "on_update_lead":
-            // Only enrich if lead doesn't have CPF yet
-            // Check if there's already an enrichment message (simple heuristic)
+            // Check if lead needs enrichment (may have updated phone/email)
             webhookLogger.info(
               { leadId },
               "Lead updated - checking if enrichment needed",
@@ -192,6 +257,23 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
             // Queue for re-enrichment attempt
             setImmediate(async () => {
               try {
+                // Check current status - skip if already completed
+                const existingLead =
+                  await container.dbStorage.findC2SLeadByLeadId(leadId);
+                if (existingLead?.enrichmentStatus === "completed") {
+                  webhookLogger.info(
+                    { leadId },
+                    "Lead already enriched, skipping re-enrichment",
+                  );
+                  return;
+                }
+
+                // Update status to processing
+                await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                  leadId,
+                  "processing",
+                );
+
                 const result = await container.enrichment.enrichLead({
                   leadId,
                   name,
@@ -201,11 +283,35 @@ export const webhookRoute = new Elysia({ prefix: "/webhook" })
                   campaignName,
                 });
 
+                // Update enrichment status based on result
+                if (result.enriched) {
+                  await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                    leadId,
+                    "completed",
+                    result.partyId,
+                    result.cpf,
+                  );
+                } else {
+                  await container.dbStorage.updateC2SLeadEnrichmentStatus(
+                    leadId,
+                    "partial",
+                    result.partyId,
+                    result.cpf,
+                  );
+                }
+
                 webhookLogger.info(
                   { leadId, enriched: result.enriched },
                   "C2S lead update enrichment completed",
                 );
               } catch (err) {
+                // Update status to failed and increment retry count
+                const errorMsg =
+                  err instanceof Error ? err.message : "Unknown error";
+                await container.dbStorage.incrementC2SLeadRetryCount(
+                  leadId,
+                  errorMsg,
+                );
                 webhookLogger.error(
                   { leadId, error: err },
                   "C2S lead update enrichment failed",

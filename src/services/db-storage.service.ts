@@ -7,6 +7,7 @@ import type {
   NewAddress,
   NewGoogleAdsLead,
   NewWebhookEvent,
+  NewC2SLead,
 } from "../db/schema";
 import { dbLogger } from "../utils/logger";
 import { normalizeCpf } from "../utils/normalize";
@@ -506,5 +507,211 @@ export class DbStorageService {
       .where(eq(schema.googleAdsLeads.leadId, leadId));
 
     dbLogger.info({ leadId }, "Reset lead for reprocessing");
+  }
+
+  // ============================================
+  // C2S Lead Storage methods (Auto-save on arrival)
+  // ============================================
+
+  /**
+   * Find C2S lead by lead ID
+   */
+  async findC2SLeadByLeadId(
+    leadId: string,
+  ): Promise<typeof schema.c2sLeads.$inferSelect | null> {
+    const results = await this.db
+      .select()
+      .from(schema.c2sLeads)
+      .where(eq(schema.c2sLeads.leadId, leadId))
+      .limit(1);
+
+    return results[0] || null;
+  }
+
+  /**
+   * Store C2S lead on webhook arrival (before enrichment)
+   * This ensures no lead is lost even if enrichment fails
+   */
+  async upsertC2SLead(
+    data: NewC2SLead,
+  ): Promise<typeof schema.c2sLeads.$inferSelect> {
+    dbLogger.debug({ leadId: data.leadId }, "Upserting C2S lead");
+
+    const existing = await this.findC2SLeadByLeadId(data.leadId);
+
+    if (existing) {
+      // Update existing lead
+      const [updated] = await this.db
+        .update(schema.c2sLeads)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.c2sLeads.id, existing.id))
+        .returning();
+
+      dbLogger.info(
+        { leadId: data.leadId, id: updated.id },
+        "Updated existing C2S lead",
+      );
+      return updated;
+    }
+
+    // Create new lead
+    const [created] = await this.db
+      .insert(schema.c2sLeads)
+      .values(data)
+      .returning();
+
+    dbLogger.info(
+      { leadId: data.leadId, id: created.id },
+      "Created new C2S lead on arrival",
+    );
+    return created;
+  }
+
+  /**
+   * Update C2S lead enrichment status after processing
+   */
+  async updateC2SLeadEnrichmentStatus(
+    leadId: string,
+    status: string,
+    partyId?: string,
+    cpf?: string,
+    error?: string,
+  ): Promise<void> {
+    const updateData: Partial<typeof schema.c2sLeads.$inferInsert> = {
+      enrichmentStatus: status,
+      updatedAt: new Date(),
+    };
+
+    if (partyId) updateData.partyId = partyId;
+    if (cpf) updateData.cpf = cpf;
+    if (status === "completed" || status === "partial") {
+      updateData.enrichedAt = new Date();
+    }
+    if (error) {
+      updateData.lastError = error;
+      updateData.lastRetryAt = new Date();
+    }
+
+    await this.db
+      .update(schema.c2sLeads)
+      .set(updateData)
+      .where(eq(schema.c2sLeads.leadId, leadId));
+
+    dbLogger.info(
+      { leadId, status, cpf },
+      "Updated C2S lead enrichment status",
+    );
+  }
+
+  /**
+   * Increment C2S lead retry count
+   */
+  async incrementC2SLeadRetryCount(
+    leadId: string,
+    error: string,
+  ): Promise<void> {
+    await this.db
+      .update(schema.c2sLeads)
+      .set({
+        retryCount: sql`COALESCE(${schema.c2sLeads.retryCount}, 0) + 1`,
+        lastRetryAt: new Date(),
+        lastError: error,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.c2sLeads.leadId, leadId));
+
+    dbLogger.info({ leadId, error }, "Incremented C2S lead retry count");
+  }
+
+  /**
+   * Get C2S leads by enrichment status
+   */
+  async getC2SLeadsByStatus(
+    statuses: string[],
+    limit: number = 100,
+  ): Promise<(typeof schema.c2sLeads.$inferSelect)[]> {
+    return this.db
+      .select()
+      .from(schema.c2sLeads)
+      .where(inArray(schema.c2sLeads.enrichmentStatus, statuses))
+      .orderBy(desc(schema.c2sLeads.receivedAt))
+      .limit(limit);
+  }
+
+  /**
+   * Get C2S leads stats for dashboard
+   */
+  async getC2SLeadStats(
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): Promise<Record<string, number>> {
+    const conditions = [];
+
+    if (dateFrom) {
+      conditions.push(
+        sql`${schema.c2sLeads.receivedAt} >= ${dateFrom.toISOString()}`,
+      );
+    }
+    if (dateTo) {
+      conditions.push(
+        sql`${schema.c2sLeads.receivedAt} <= ${dateTo.toISOString()}`,
+      );
+    }
+
+    const query = this.db
+      .select({
+        status: schema.c2sLeads.enrichmentStatus,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(schema.c2sLeads);
+
+    const results =
+      conditions.length > 0
+        ? await query
+            .where(and(...conditions))
+            .groupBy(schema.c2sLeads.enrichmentStatus)
+        : await query.groupBy(schema.c2sLeads.enrichmentStatus);
+
+    const stats: Record<string, number> = {};
+    for (const row of results) {
+      stats[row.status ?? "unknown"] = row.count;
+    }
+    return stats;
+  }
+
+  /**
+   * Get recent C2S leads for dashboard
+   */
+  async getRecentC2SLeads(
+    limit: number = 20,
+    dateFrom?: Date,
+    dateTo?: Date,
+  ): Promise<(typeof schema.c2sLeads.$inferSelect)[]> {
+    const conditions = [];
+
+    if (dateFrom) {
+      conditions.push(
+        sql`${schema.c2sLeads.receivedAt} >= ${dateFrom.toISOString()}`,
+      );
+    }
+    if (dateTo) {
+      conditions.push(
+        sql`${schema.c2sLeads.receivedAt} <= ${dateTo.toISOString()}`,
+      );
+    }
+
+    const query = this.db.select().from(schema.c2sLeads);
+
+    if (conditions.length > 0) {
+      return query
+        .where(and(...conditions))
+        .orderBy(desc(schema.c2sLeads.receivedAt))
+        .limit(limit);
+    }
+
+    return query.orderBy(desc(schema.c2sLeads.receivedAt)).limit(limit);
   }
 }
