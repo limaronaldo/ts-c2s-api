@@ -491,9 +491,71 @@ const POINTS = {
 - [x] Configurar variáveis de ambiente
 - [x] Registrar no MCP index
 - [x] Documentar tudo
-- [ ] Deploy no Fly.io
-- [ ] Testar em produção
-- [ ] Monitorar alertas
+- [x] Deploy no Fly.io
+- [x] Testar em produção
+- [x] Monitorar alertas
+
+---
+
+## 🐛 Bug Fix: CPF Search Returns Null (January 31, 2026)
+
+### Problem
+After deploying Meilisearch integration, the batch enrichment endpoint was returning `companies: null` even for leads who own companies.
+
+### Root Causes
+
+1. **Wrong search method**: The code was using `attributesToSearchOn: ["socios_cpfs"]` which performs **text search**, but this doesn't work well for exact CPF matching in arrays.
+
+2. **API key mismatch**: The production `MEILISEARCH_KEY` secret had a different digest than the actual Meilisearch master key.
+
+### Solution
+
+**Changed CPF search method** in `src/services/meilisearch-company.service.ts`:
+
+```typescript
+// BEFORE (broken) - text search doesn't match exact CPFs in arrays
+body: JSON.stringify({
+  q: normalizedCpf,
+  attributesToSearchOn: ["socios_cpfs"],
+  limit,
+}),
+
+// AFTER (working) - filter provides exact match
+body: JSON.stringify({
+  filter: `socios_cpfs = ${normalizedCpf}`,
+  limit,
+}),
+```
+
+**Updated production secret:**
+```bash
+fly secrets set "MEILISEARCH_KEY=+irW8+WB+vRVb2pYxvEfR0Cili9zVK/VQY5osx8ejCw=" -a ts-c2s-api
+```
+
+### Verification
+
+**Before fix (03:18:02 UTC):**
+```json
+{"level":50,"module":"enrichment","status":400,"cpf":"22066195049","msg":"Meilisearch CPF search failed"}
+```
+
+**After fix (03:21:23 UTC):**
+```json
+{"level":30,"module":"enrichment","cpf":"22066195049","totalCompanies":1,"totalCapital":67800,"msg":"Found companies for CPF"}
+```
+
+### Test Results
+
+| Lead | CPF | Companies | Capital Social |
+|------|-----|-----------|----------------|
+| Moacir Moraes Reis | 22066195049 | 1 (MORAES REIS IMOVEIS LTDA) | R$ 67,800 |
+| Silvia Stockler | 12628324890 | 1 | - |
+
+### Key Learnings
+
+1. **`attributesToSearchOn`** is for fuzzy text search, NOT for exact matching in arrays
+2. **`filter`** with `=` operator provides exact match on array fields like `socios_cpfs`
+3. Always verify API keys match between production and the target service
 
 ---
 

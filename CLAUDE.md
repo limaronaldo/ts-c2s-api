@@ -474,6 +474,8 @@ A pasta `public/` é copiada no Dockerfile para produção.
 | `docs/DISCOVERY_API.md` | **Discovery API completa** (CPF Lookup, Bulk Enrich, Reports) |
 | `docs/CPF_DISCOVERY_PROCESS.md` | Processo completo de descoberta de CPF |
 | `docs/BATCH_ENRICHMENT_PROJECT.md` | Projeto de enriquecimento em massa |
+| `docs/MEILISEARCH_INTEGRATION.md` | **Integração Meilisearch** (65M empresas, MCP tools) |
+| `docs/LEAD_COMPANY_INTERSECTION.md` | Interseção de leads com base de empresas |
 | `docs/MEMORA_KNOWLEDGE.md` | Knowledge base para Memora |
 
 ---
@@ -808,6 +810,79 @@ cd /Users/ronaldo/Projects/FORK/engram
 cargo build --release
 cargo test
 ```
+
+---
+
+## Meilisearch Company Integration (January 30-31, 2026)
+
+### Overview
+
+Integração com Meilisearch IBVI para busca de empresas por CPF de sócio.
+
+**Base:** https://ibvi-meilisearch-v2.fly.dev  
+**Index:** `companies` (65.2M empresas brasileiras)  
+**Service:** `src/services/meilisearch-company.service.ts`
+
+### Configuração
+
+```bash
+# .env
+MEILISEARCH_URL=https://ibvi-meilisearch-v2.fly.dev
+MEILISEARCH_KEY=+irW8+WB+vRVb2pYxvEfR0Cili9zVK/VQY5osx8ejCw=
+```
+
+### Uso no Enriquecimento
+
+O batch enrichment (`/batch/enrich-direct`) automaticamente busca empresas quando encontra CPF:
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "completed",
+    "cpf": "22066195049",
+    "enrichedName": "MOACIR MORAES REIS",
+    "companies": {
+      "totalCompanies": 1,
+      "totalCapitalSocial": 67800,
+      "companies": [
+        {
+          "cnpj": "12740731000152",
+          "razaoSocial": "MORAES REIS IMOVEIS LTDA",
+          "capitalSocial": 67800,
+          "isAdministrador": true
+        }
+      ]
+    }
+  }
+}
+```
+
+### Bug Fix (January 31, 2026)
+
+**Problema:** Endpoint retornava `companies: null` mesmo para leads com empresas.
+
+**Causas:**
+1. Código usava `attributesToSearchOn` (text search) em vez de `filter` (exact match)
+2. `MEILISEARCH_KEY` em produção estava incorreta
+
+**Solução:**
+```typescript
+// ANTES (broken)
+body: JSON.stringify({
+  q: normalizedCpf,
+  attributesToSearchOn: ["socios_cpfs"],
+  limit,
+})
+
+// DEPOIS (working)
+body: JSON.stringify({
+  filter: `socios_cpfs = ${normalizedCpf}`,
+  limit,
+})
+```
+
+**Documentação completa:** `docs/MEILISEARCH_INTEGRATION.md`
 
 ---
 
@@ -1307,5 +1382,5 @@ container.dbStorage.getC2SLeadStats(dateFrom?, dateTo?)
 
 ---
 
-**Última atualização:** Janeiro 29, 2026 (Session 3 - MCP Server + Auto-Save)  
+**Última atualização:** Janeiro 31, 2026 (Meilisearch CPF search fix)  
 **Mantido por:** Ronaldo Lima + Claude AI
