@@ -39,6 +39,9 @@ export interface HighValueCriteria {
   netWorth?: number; // Patrimônio líquido
   occupation?: string; // Occupation/profession
   education?: string; // Education level
+  // Company ownership criteria (NEW)
+  totalCompanyCapital?: number; // Total capital social of owned companies
+  isCompanyAdministrator?: boolean; // Is sócio-administrador in companies
 }
 
 export interface HighValueResult {
@@ -56,6 +59,7 @@ export interface HighValueResult {
     propertyValue?: number;
     netWorth?: number;
     occupation?: string;
+    totalCompanyCapital?: number;
   };
 }
 
@@ -88,6 +92,11 @@ const POINTS = {
   executiveOccupation: 15, // CEO, Diretor, etc.
   professionalOccupation: 10, // Médico, Advogado, etc.
   graduateEducation: 5, // Pós-graduação, MBA
+  // Company capital thresholds (NEW)
+  veryHighCompanyCapital: 40, // R$5M+ in company capital
+  highCompanyCapital: 25, // R$1M+ in company capital
+  moderateCompanyCapital: 15, // R$500k+ in company capital
+  companyAdministrator: 10, // Is sócio-administrador
 };
 
 // High-value occupations
@@ -307,6 +316,35 @@ export function detectHighValueLead(
     }
   }
 
+  // 10. Check company capital (NEW - empresários)
+  if (criteria.totalCompanyCapital) {
+    const capitalFormatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      maximumFractionDigits: 0,
+    }).format(criteria.totalCompanyCapital);
+
+    if (criteria.totalCompanyCapital >= 5000000) {
+      score += POINTS.veryHighCompanyCapital;
+      reasons.push(`Empresário - Capital social: ${capitalFormatted}`);
+      details.totalCompanyCapital = criteria.totalCompanyCapital;
+    } else if (criteria.totalCompanyCapital >= 1000000) {
+      score += POINTS.highCompanyCapital;
+      reasons.push(`Empresário - Capital social: ${capitalFormatted}`);
+      details.totalCompanyCapital = criteria.totalCompanyCapital;
+    } else if (criteria.totalCompanyCapital >= 500000) {
+      score += POINTS.moderateCompanyCapital;
+      reasons.push(`Empresário - Capital social: ${capitalFormatted}`);
+      details.totalCompanyCapital = criteria.totalCompanyCapital;
+    }
+  }
+
+  // 11. Check if is company administrator (NEW)
+  if (criteria.isCompanyAdministrator) {
+    score += POINTS.companyAdministrator;
+    // Don't add to reasons - it's a supporting factor
+  }
+
   // Determine tier based on score
   let tier: HighValueResult["tier"] = "none";
   if (score >= PLATINUM_THRESHOLD) {
@@ -349,6 +387,8 @@ export function mightBeHighValue(criteria: HighValueCriteria): boolean {
   if (criteria.propertyValue && criteria.propertyValue >= 2000000) return true;
   if (criteria.netWorth && criteria.netWorth >= 1000000) return true;
   if (criteria.propertyCount && criteria.propertyCount >= 3) return true;
+  if (criteria.totalCompanyCapital && criteria.totalCompanyCapital >= 1000000)
+    return true;
 
   return false;
 }

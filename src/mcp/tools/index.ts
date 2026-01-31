@@ -17,6 +17,7 @@ import { insightTools, handleInsightTool } from "./insights";
 import { tierTools, handleTierTool } from "./tier";
 import { searchTools, handleSearchTool } from "./search";
 import { monitorTools, handleMonitorTool } from "./monitor";
+import { meilisearchTools, handleMeilisearchTool } from "./meilisearch";
 
 // Collect all tool definitions
 export function getAllTools(): Tool[] {
@@ -40,6 +41,7 @@ export function getAllTools(): Tool[] {
     ...tierTools,
     ...searchTools,
     ...monitorTools,
+    ...meilisearchTools,
   ];
 }
 
@@ -127,6 +129,11 @@ export async function handleToolCall(
   // Monitor tools
   if (monitorTools.some((t) => t.name === name)) {
     return handleMonitorTool(name, args, container);
+  }
+
+  // Meilisearch tools
+  if (meilisearchTools.some((t) => t.name === name)) {
+    return handleMeilisearchTool(name, args, container);
   }
 
   throw new Error(`Unknown tool: ${name}`);

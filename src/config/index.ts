@@ -140,6 +140,13 @@ const configSchema = z.object({
     .string()
     .default("true")
     .transform((val) => val.toLowerCase() === "true" || val === "1"),
+
+  // Meilisearch (65.2M Brazilian companies)
+  MEILISEARCH_URL: z
+    .string()
+    .url()
+    .default("https://ibvi-meilisearch-v2.fly.dev"),
+  MEILISEARCH_KEY: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;

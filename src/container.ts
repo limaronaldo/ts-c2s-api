@@ -20,6 +20,7 @@ import { CnpjLookupService } from "./services/cnpj-lookup.service";
 import { TierCalculatorService } from "./services/tier-calculator.service";
 import { WebSearchService } from "./services/web-search.service";
 import { EnrichmentMonitorService } from "./services/enrichment-monitor.service";
+import { MeilisearchCompanyService } from "./services/meilisearch-company.service";
 
 /**
  * Simple dependency injection container
@@ -48,6 +49,7 @@ class ServiceContainer {
   private _tierCalculator?: TierCalculatorService;
   private _webSearch?: WebSearchService;
   private _enrichmentMonitor?: EnrichmentMonitorService;
+  private _meilisearchCompany?: MeilisearchCompanyService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -203,6 +205,13 @@ class ServiceContainer {
     return this._enrichmentMonitor;
   }
 
+  get meilisearchCompany(): MeilisearchCompanyService {
+    if (!this._meilisearchCompany) {
+      this._meilisearchCompany = new MeilisearchCompanyService();
+    }
+    return this._meilisearchCompany;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -227,6 +236,7 @@ class ServiceContainer {
     this._tierCalculator = undefined;
     this._webSearch = undefined;
     this._enrichmentMonitor = undefined;
+    this._meilisearchCompany = undefined;
   }
 }
 

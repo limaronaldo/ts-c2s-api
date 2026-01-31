@@ -391,6 +391,28 @@ export class EnrichmentService {
       }
     }
 
+    // Append company data if CPF owns businesses (NEW)
+    if (person.cpf && container.meilisearchCompany.isEnabled()) {
+      try {
+        const companySummary =
+          await container.meilisearchCompany.findCompaniesByCpf(person.cpf);
+        if (companySummary.totalCompanies > 0) {
+          const companySection =
+            container.meilisearchCompany.formatCompaniesForMessage(
+              companySummary,
+            );
+          if (companySection) {
+            description += "\n" + companySection;
+          }
+        }
+      } catch (error) {
+        enrichmentLogger.warn(
+          { cpf: person.cpf, error },
+          "Failed to fetch company data for enrichment",
+        );
+      }
+    }
+
     // Try adding enrichment message to existing lead first
     try {
       await this.c2sService.createMessage(lead.leadId, description);
@@ -589,6 +611,28 @@ export class EnrichmentService {
       }
     }
 
+    // Append company data if CPF owns businesses (NEW)
+    if (cpf && container.meilisearchCompany.isEnabled()) {
+      try {
+        const companySummary =
+          await container.meilisearchCompany.findCompaniesByCpf(cpf);
+        if (companySummary.totalCompanies > 0) {
+          const companySection =
+            container.meilisearchCompany.formatCompaniesForMessage(
+              companySummary,
+            );
+          if (companySection) {
+            description += "\n" + companySection;
+          }
+        }
+      } catch (error) {
+        enrichmentLogger.warn(
+          { cpf, error },
+          "Failed to fetch company data for basic enrichment",
+        );
+      }
+    }
+
     // Try adding message to existing lead first
     try {
       await this.c2sService.createMessage(lead.leadId, description);
@@ -684,6 +728,28 @@ export class EnrichmentService {
         this.ibviPropertyService.formatForMessage(propertyData);
       if (propertySection) {
         description += "\n\n" + propertySection;
+      }
+    }
+
+    // Append company data if CPF owns businesses (NEW)
+    if (cpf && container.meilisearchCompany.isEnabled()) {
+      try {
+        const companySummary =
+          await container.meilisearchCompany.findCompaniesByCpf(cpf);
+        if (companySummary.totalCompanies > 0) {
+          const companySection =
+            container.meilisearchCompany.formatCompaniesForMessage(
+              companySummary,
+            );
+          if (companySection) {
+            description += "\n" + companySection;
+          }
+        }
+      } catch (error) {
+        enrichmentLogger.warn(
+          { cpf, error },
+          "Failed to fetch company data for partial enrichment",
+        );
       }
     }
 
@@ -865,6 +931,22 @@ export class EnrichmentService {
           state: addr.uf,
         }));
 
+        // Fetch company data if available (NEW)
+        let companySummary;
+        if (personData.cpf && container.meilisearchCompany.isEnabled()) {
+          try {
+            companySummary =
+              await container.meilisearchCompany.findCompaniesByCpf(
+                personData.cpf,
+              );
+          } catch (error) {
+            enrichmentLogger.warn(
+              { cpf: personData.cpf, error },
+              "Failed to fetch companies for high-value detection",
+            );
+          }
+        }
+
         const result = detectHighValueLead({
           income:
             normalizeIncome(personData.renda, this.incomeMultiplier) ??
@@ -878,7 +960,11 @@ export class EnrichmentService {
           addresses,
           leadName,
           enrichedName: personData.nome,
-          // companyCount would come from CNPJ lookup - future enhancement
+          companyCount: companySummary?.totalCompanies,
+          totalCompanyCapital: companySummary?.totalCapitalSocial,
+          isCompanyAdministrator: companySummary?.companies.some(
+            (c) => c.isAdministrador,
+          ),
         });
 
         // Only alert for truly high-value leads (Gold+ tier, score >= 50)

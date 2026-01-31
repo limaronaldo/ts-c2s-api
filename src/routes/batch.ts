@@ -100,6 +100,23 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
 
         const person = workResult.data;
 
+        // Step 3: Search for companies in Meilisearch
+        let companies = null;
+        if (person.cpf && container.meilisearchCompany.isEnabled()) {
+          try {
+            const companySummary =
+              await container.meilisearchCompany.findCompaniesByCpf(person.cpf);
+            if (companySummary.totalCompanies > 0) {
+              companies = companySummary;
+            }
+          } catch (err) {
+            apiLogger.warn(
+              { cpf: person.cpf, error: err },
+              "Meilisearch company search failed",
+            );
+          }
+        }
+
         return {
           success: true,
           data: {
@@ -122,6 +139,7 @@ export const batchRoute = new Elysia({ prefix: "/batch" })
             phones: person.telefones,
             emails: person.emails,
             addresses: person.enderecos,
+            companies,
           },
         };
       } catch (error) {

@@ -1,0 +1,352 @@
+{
+  "companies": {
+    "04893367000132": {
+      "cnpj": "04893367000132",
+      "razao_social": "MBRAS AUTOMACAO INDUSTRIAL LTDA",
+      "nome_fantasia": "MBRAS",
+      "capital_social": 0.0,
+      "uf": "PR",
+      "situacao": "08",
+      "socios_count": 2
+    },
+    "16728568000163": {
+      "cnpj": "16728568000163",
+      "razao_social": "MBRAS GESTAO IMOBILIARIA LTDA",
+      "nome_fantasia": "MBRAS",
+      "capital_social": 1000000.0,
+      "uf": "SP",
+      "situacao": "02",
+      "socios_count": 1
+    },
+    "03203314000180": {
+      "cnpj": "03203314000180",
+      "razao_social": "MBRAS MANUTENCAO E MONTAGEM INDUSTRIAL LTDA",
+      "nome_fantasia": "MBRAS MANUTENCAO E MONTAGEM INDUSTRIAL",
+      "capital_social": 10000.0,
+      "uf": "BA",
+      "situacao": "04",
+      "socios_count": 2
+    },
+    "15353533000124": {
+      "cnpj": "15353533000124",
+      "razao_social": "MBRAS INTELIGENCIA EDUCACIONAL E SISTEMA DE ENSINO VIRTUAL LTDA",
+      "nome_fantasia": "MBRAS CURSOS E LIVROS VIRTUAIS",
+      "capital_social": 3000.0,
+      "uf": "RJ",
+      "situacao": "04",
+      "socios_count": 2
+    },
+    "15645149000103": {
+      "cnpj": "15645149000103",
+      "razao_social": "MBRAS LOCADORA E TRANSPORTE LTDA",
+      "nome_fantasia": "MBRAS INTERNATIONAL TRANSPORT SERVICES",
+      "capital_social": 76500.0,
+      "uf": "RJ",
+      "situacao": "04",
+      "socios_count": 1
+    },
+    "16955602000132": {
+      "cnpj": "16955602000132",
+      "razao_social": "MBRAS SOLUCOES IMOBILIARIAS LTDA",
+      "nome_fantasia": "MBRAS IMOBILIARIA",
+      "capital_social": 2000000.0,
+      "uf": "SP",
+      "situacao": "02",
+      "socios_count": 1
+    },
+    "17661203000121": {
+      "cnpj": "17661203000121",
+      "razao_social": "MBRAS TECNOLOGIA DA INFORMACAO LTDA",
+      "nome_fantasia": "MBRAS IT SOLUTIONS",
+      "capital_social": 20000.0,
+      "uf": "SP",
+      "situacao": "02",
+      "socios_count": 1
+    },
+    "39900732000173": {
+      "cnpj": "39900732000173",
+      "razao_social": "MBRAS PARTICIPACOES E EMPREENDIMENTOS IMOBILIARIOS LTDA",
+      "nome_fantasia": "",
+      "capital_social": 10000.0,
+      "uf": "SP",
+      "situacao": "02",
+      "socios_count": 5
+    },
+    "43313777000119": {
+      "cnpj": "43313777000119",
+      "razao_social": "MBRAS HOLDING LTDA",
+      "nome_fantasia": "MBRAS HOLDING",
+      "capital_social": 10000.0,
+      "uf": "PR",
+      "situacao": "02",
+      "socios_count": 2
+    },
+    "59760143000144": {
+      "cnpj": "59760143000144",
+      "razao_social": "MBRAS ASSOCIADOS SOLUCOES LTDA",
+      "nome_fantasia": "",
+      "capital_social": 10000.0,
+      "uf": "SP",
+      "situacao": "02",
+      "socios_count": 2
+    }
+  },
+  "socios": {
+    "00923706917": {
+      "cpf": "00923706917",
+      "nome": "GERHARD MANFRED SCHABERLE",
+      "companies": [
+        "04893367000132"
+      ]
+    },
+    "00923704973": {
+      "cpf": "00923704973",
+      "nome": "MICHAEL ECKEL",
+      "companies": [
+        "04893367000132"
+      ]
+    },
+    "12096865204": {
+      "cpf": "12096865204",
+      "nome": "ROSELY LIRA MELO DE OLIVEIRA",
+      "companies": [
+        "16728568000163"
+      ]
+    },
+    "93132107549": {
+      "cpf": "93132107549",
+      "nome": "EMILIANO BRASIL OLIVEIRA",
+      "companies": [
+        "03203314000180"
+      ]
+    },
+    "88902960544": {
+      "cpf": "88902960544",
+      "nome": "JOSUE DE MATOS SILVA",
+      "companies": [
+        "03203314000180"
+      ]
+    },
+    "08329716775": {
+      "cpf": "08329716775",
+      "nome": "LAURA BRASIL",
+      "companies": [
+        "15353533000124"
+      ]
+    },
+    "01079015523": {
+      "cpf": "01079015523",
+      "nome": "DEIVISON MAYNART PINHEIRO",
+      "companies": [
+        "15353533000124",
+        "15645149000103"
+      ]
+    },
+    "35855344819": {
+      "cpf": "35855344819",
+      "nome": "LUCAS MELO DE OLIVEIRA",
+      "companies": [
+        "16955602000132"
+      ]
+    },
+    "47340301895": {
+      "cpf": "47340301895",
+      "nome": "ARTHUR OLIVEIRA DE MENIS",
+      "companies": [
+        "17661203000121"
+      ]
+    },
+    "24860484568": {
+      "cpf": "24860484568",
+      "nome": "MARIA AYDIL STUDART DE OLIVEIRA",
+      "companies": [
+        "39900732000173"
+      ]
+    },
+    "36380942866": {
+      "cpf": "36380942866",
+      "nome": "PAULO ANDRE STUDART DE OLIVEIRA",
+      "companies": [
+        "39900732000173"
+      ]
+    },
+    "19325754568": {
+      "cpf": "19325754568",
+      "nome": "MARIA ANTONIETA STUDART DE CARVALHO",
+      "companies": [
+        "39900732000173"
+      ]
+    },
+    "48882194515": {
+      "cpf": "48882194515",
+      "nome": "JOAO GUILHERME BITTENCOURT STUDART",
+      "companies": [
+        "39900732000173"
+      ]
+    },
+    "33668992800": {
+      "cpf": "33668992800",
+      "nome": "PEDRO HENRIQUE STUDART DE OLIVEIRA",
+      "companies": [
+        "39900732000173",
+        "59760143000144"
+      ]
+    },
+    "00959339990": {
+      "cpf": "00959339990",
+      "nome": "PATRICIA CARNEIRO RIBEIRO MAFFISSONI",
+      "companies": [
+        "43313777000119"
+      ]
+    },
+    "06178759959": {
+      "cpf": "06178759959",
+      "nome": "ALAN FRANCISCO MAFFISSONI",
+      "companies": [
+        "43313777000119"
+      ]
+    },
+    "42826270850": {
+      "cpf": "42826270850",
+      "nome": "MARIANA DE MORAIS",
+      "companies": [
+        "59760143000144"
+      ]
+    }
+  },
+  "connections": [
+    {
+      "cnpj": "04893367000132",
+      "cpf": "00923706917",
+      "qualificacao": "22",
+      "data_entrada": "20030806",
+      "percentual": null
+    },
+    {
+      "cnpj": "04893367000132",
+      "cpf": "00923704973",
+      "qualificacao": "49",
+      "data_entrada": "20020206",
+      "percentual": null
+    },
+    {
+      "cnpj": "16728568000163",
+      "cpf": "12096865204",
+      "qualificacao": "49",
+      "data_entrada": "20120810",
+      "percentual": null
+    },
+    {
+      "cnpj": "03203314000180",
+      "cpf": "93132107549",
+      "qualificacao": "22",
+      "data_entrada": "20061026",
+      "percentual": null
+    },
+    {
+      "cnpj": "03203314000180",
+      "cpf": "88902960544",
+      "qualificacao": "49",
+      "data_entrada": "19990607",
+      "percentual": null
+    },
+    {
+      "cnpj": "15353533000124",
+      "cpf": "08329716775",
+      "qualificacao": "49",
+      "data_entrada": "20120412",
+      "percentual": null
+    },
+    {
+      "cnpj": "15353533000124",
+      "cpf": "01079015523",
+      "qualificacao": "22",
+      "data_entrada": "20120412",
+      "percentual": null
+    },
+    {
+      "cnpj": "15645149000103",
+      "cpf": "01079015523",
+      "qualificacao": "49",
+      "data_entrada": "20120522",
+      "percentual": null
+    },
+    {
+      "cnpj": "16955602000132",
+      "cpf": "35855344819",
+      "qualificacao": "49",
+      "data_entrada": "20120910",
+      "percentual": null
+    },
+    {
+      "cnpj": "17661203000121",
+      "cpf": "47340301895",
+      "qualificacao": "49",
+      "data_entrada": "20230914",
+      "percentual": null
+    },
+    {
+      "cnpj": "39900732000173",
+      "cpf": "24860484568",
+      "qualificacao": "22",
+      "data_entrada": "20211222",
+      "percentual": null
+    },
+    {
+      "cnpj": "39900732000173",
+      "cpf": "36380942866",
+      "qualificacao": "22",
+      "data_entrada": "20231018",
+      "percentual": null
+    },
+    {
+      "cnpj": "39900732000173",
+      "cpf": "19325754568",
+      "qualificacao": "22",
+      "data_entrada": "20251028",
+      "percentual": null
+    },
+    {
+      "cnpj": "39900732000173",
+      "cpf": "48882194515",
+      "qualificacao": "22",
+      "data_entrada": "20251028",
+      "percentual": null
+    },
+    {
+      "cnpj": "39900732000173",
+      "cpf": "33668992800",
+      "qualificacao": "49",
+      "data_entrada": "20201124",
+      "percentual": null
+    },
+    {
+      "cnpj": "43313777000119",
+      "cpf": "00959339990",
+      "qualificacao": "49",
+      "data_entrada": "20210827",
+      "percentual": null
+    },
+    {
+      "cnpj": "43313777000119",
+      "cpf": "06178759959",
+      "qualificacao": "49",
+      "data_entrada": "20210827",
+      "percentual": null
+    },
+    {
+      "cnpj": "59760143000144",
+      "cpf": "42826270850",
+      "qualificacao": "22",
+      "data_entrada": "20250306",
+      "percentual": null
+    },
+    {
+      "cnpj": "59760143000144",
+      "cpf": "33668992800",
+      "qualificacao": "49",
+      "data_entrada": "20250306",
+      "percentual": null
+    }
+  ]
+}

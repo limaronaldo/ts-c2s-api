@@ -31,6 +31,6 @@ primary_region = "gru"
   timeout = "5s"
 
 [[vm]]
-  cpu_kind = "shared"
-  cpus = 1
-  memory_mb = 512
+  cpu_kind = "performance"
+  cpus = 2
+  memory_mb = 8192
