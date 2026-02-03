@@ -68,14 +68,26 @@ container.c2sService.createMessage(leadId, msg);
 | WorkApiService | `services/work-api.service.ts` | Completa Buscas API |
 | CpfDiscoveryService | `services/cpf-discovery.service.ts` | Descoberta de CPF (4 tiers) |
 | EnrichmentService | `services/enrichment.service.ts` | Orquestrador principal |
-| C2SService | `services/c2s.service.ts` | Integração CRM |
+| C2SService | `services/c2s.service.ts` | Integração CRM C2S |
 | AlertService | `services/alert.service.ts` | Slack + Email + Low rate alerts |
-| DbStorageService | `services/db-storage.service.ts` | Persistência |
+| DbStorageService | `services/db-storage.service.ts` | Persistência PostgreSQL |
 | CpfLookupService | `services/cpf-lookup.service.ts` | Busca CPF por nome (DuckDB 223M) + auto-scaling |
 | FlyScaleService | `services/fly-scale.service.ts` | Auto-scaling Fly.io machines |
 | BulkEnrichmentService | `services/bulk-enrichment.service.ts` | Enriquecimento em massa |
 | ProfileReportService | `services/profile-report.service.ts` | Relatórios MD/HTML/PDF |
 | EnrichmentMonitorService | `services/enrichment-monitor.service.ts` | Monitor de taxa (<80% alert) |
+| MeilisearchCompanyService | `services/meilisearch-company.service.ts` | Busca empresas (65M CNPJs) |
+| TwentyService | `services/twenty.service.ts` | Integração Twenty CRM |
+| LeadQualityService | `services/lead-quality.service.ts` | Score de qualidade (0-100) |
+| RiskDetectorService | `services/risk-detector.service.ts` | Detecção de risco |
+| DomainAnalyzerService | `services/domain-analyzer.service.ts` | Análise de domínio de email |
+| CnpjLookupService | `services/cnpj-lookup.service.ts` | Lookup de CNPJ |
+| TierCalculatorService | `services/tier-calculator.service.ts` | Cálculo de tier (S/A/B/C/Risk) |
+| WebSearchService | `services/web-search.service.ts` | Busca web (Google CSE) |
+| LeadAnalysisService | `services/lead-analysis.service.ts` | Análise profunda de leads |
+| IbviPropertyService | `services/ibvi-property.service.ts` | Propriedades IBVI |
+| WebInsightService | `services/web-insight.service.ts` | Insights web automáticos |
+| PrometheusService | `services/prometheus.service.ts` | Métricas Prometheus |
 
 ---
 
@@ -132,6 +144,55 @@ ts-c2s-api/
 | `/discovery/bulk/enrich` | POST | Enriquecimento em massa |
 | `/discovery/report/generate` | POST | Gera relatório de CPFs (MD/HTML/PDF) |
 | `/discovery/report/from-names` | POST | Pipeline completo: CPF → Enrich → Report |
+
+### Customer & CRM Routes
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/customer/cpf/:cpf` | GET | Busca cliente por CPF |
+| `/customer/phone/:phone` | GET | Busca cliente por telefone |
+| `/customer/email/:email` | GET | Busca cliente por email |
+| `/sellers` | GET | Lista vendedores do C2S |
+| `/sellers/:id` | GET | Detalhes do vendedor |
+| `/sellers` | POST | Criar vendedor |
+| `/sellers/:id` | PUT | Atualizar vendedor |
+
+### Tags & Activities Routes
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/tags` | GET | Lista tags disponíveis |
+| `/tags` | POST | Criar nova tag |
+| `/tags/lead/:leadId` | GET | Tags de um lead |
+| `/tags/lead/:leadId` | POST | Adicionar tag ao lead |
+| `/leads/:leadId/note` | POST | Adicionar nota ao lead |
+| `/leads/:leadId/call` | POST | Registrar ligação |
+| `/leads/:leadId/email` | POST | Registrar email |
+| `/leads/:leadId/meeting` | POST | Registrar reunião |
+| `/leads/:leadId/task` | POST | Criar tarefa |
+
+### Queue Distribution Routes
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/queues` | GET | Lista filas de distribuição |
+| `/queues/:queueId/sellers` | GET | Vendedores da fila |
+| `/queues/auto-assign` | POST | Auto-atribuir lead |
+| `/queues/distribute` | POST | Distribuir leads |
+| `/queues/rebalance` | POST | Rebalancear filas |
+
+### Company & Database Routes
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/company/info` | GET | Info da empresa |
+| `/company/sync` | POST | Sincronizar dados |
+| `/company/analyze` | POST | Analisar empresa |
+| `/db/tables` | GET | Listar tabelas |
+| `/db/table/:name` | GET | Dados da tabela |
+| `/db/schema/:table` | GET | Schema da tabela |
+| `/db/count/:table` | GET | Contagem de registros |
+| `/db/stats` | GET | Estatísticas do banco |
 
 ---
 
@@ -322,6 +383,23 @@ FLY_API_TOKEN           # Fly.io API token for auto-scaling
 CPF_LOOKUP_MACHINE_ID   # Machine ID: 90807561f37668
 CPF_LOOKUP_AUTO_SCALE   # true/false (default: true)
 
+# Meilisearch (65M empresas)
+MEILISEARCH_URL     # default: https://ibvi-meilisearch-v2.fly.dev
+MEILISEARCH_KEY     # API key para Meilisearch
+
+# Twenty CRM Integration
+TWENTY_BASE_URL         # GraphQL endpoint (default: Railway app)
+TWENTY_API_KEY          # Primary API key
+TWENTY_API_KEY_WS_OPS   # Operations workspace key
+TWENTY_API_KEY_WS_SENIOR # Senior workspace key
+TWENTY_API_KEY_WS_GENERAL # General workspace key
+TWENTY_ENABLED          # true/false (default: false)
+
+# Google Search (web insights)
+GOOGLE_API_KEY      # Google API key
+GOOGLE_CSE_ID       # Custom Search Engine ID
+ENABLE_GOOGLE_SEARCH # true/false (default: true)
+
 # Optional
 ENABLE_CRON=true    # Cron job
 INCOME_MULTIPLIER=1.9
@@ -477,6 +555,8 @@ A pasta `public/` é copiada no Dockerfile para produção.
 | `docs/MEILISEARCH_INTEGRATION.md` | **Integração Meilisearch** (65M empresas, MCP tools) |
 | `docs/LEAD_COMPANY_INTERSECTION.md` | Interseção de leads com base de empresas |
 | `docs/MEMORA_KNOWLEDGE.md` | Knowledge base para Memora |
+| `docs/AI_MEMORY_SYSTEMS_GUIDE.md` | **Guia completo Memora/Engram** (memory tools reference) |
+| `docs/MCP_SERVER.md` | Setup e troubleshooting do MCP Server |
 
 ---
 
@@ -886,6 +966,115 @@ body: JSON.stringify({
 
 ---
 
+## Twenty CRM Integration (February 2026)
+
+### Overview
+
+Integração com Twenty CRM para gestão de leads com roteamento por tier e workspaces.
+
+**Base URL:** https://twenty-server-production-1c77.up.railway.app  
+**Service:** `src/services/twenty.service.ts`  
+**MCP Tools:** 13 tools (6 CRUD + 4 Analytics + 3 Workflow)
+
+### Workspaces
+
+| Workspace | Roles | Lead Tiers |
+|-----------|-------|------------|
+| `WS-OPS` | Admin, SuperManager | Global visibility |
+| `WS-SENIOR` | Broker Senior, Manager | Tier S, A |
+| `WS-GENERAL` | Broker Jr, Assistants | Tier B, C, Risk |
+
+### Lead Tiers & SLA
+
+| Tier | SLA (First Contact) | Routing |
+|------|---------------------|---------|
+| **S** (Premium) | 2 horas | WS-SENIOR |
+| **A** (Alto Valor) | 24 horas | WS-SENIOR |
+| **B** (Qualificado) | 48 horas | WS-GENERAL |
+| **C** (Standard) | 72 horas | WS-GENERAL |
+| **RISK** | 72 horas | WS-GENERAL |
+
+### Lead Status Flow
+
+```
+novo → contato_inicial → qualificado → visita_agendada → visita_realizada
+                                                              ↓
+                              proposta_enviada → negociacao → fechado_ganho
+                                                          → fechado_perdido
+                                                          → nurturing
+```
+
+### Delegation System
+
+Leads Tier S/A podem ser delegados para WS-GENERAL com tracking:
+
+```typescript
+// Delegation expira automaticamente
+S/A → WS-GENERAL: 7 dias
+Outros: 14 dias
+Default: 30 dias
+```
+
+**Razões de delegação:** training, workload, profile, coverage
+
+### Intent Signal
+
+Calculado automaticamente baseado em:
+- **high:** Paid source + contato recente + follow-up agendado
+- **medium:** Contato nos últimos 14 dias OU follow-up agendado
+- **low:** Sem atividade recente
+
+### Configuração
+
+```bash
+# Required
+TWENTY_BASE_URL=https://twenty-server-production-1c77.up.railway.app
+TWENTY_API_KEY=your_api_key
+TWENTY_ENABLED=true
+
+# Workspace-specific keys (optional)
+TWENTY_API_KEY_WS_OPS=key_for_ops
+TWENTY_API_KEY_WS_SENIOR=key_for_senior
+TWENTY_API_KEY_WS_GENERAL=key_for_general
+```
+
+### Uso
+
+```typescript
+import { container } from "./container";
+
+// Criar lead (auto-routing por tier)
+await container.twenty.createLead({
+  name: "João Silva",
+  phone: "11999887766",
+  source: "google_ads",
+  tier: "A",
+  score: 85,
+});
+
+// Verificar SLA
+const sla = container.twenty.isWithinSla("A", "2026-02-03T10:00:00Z");
+// { withinSla: true, hoursElapsed: 5.2, slaHours: 24 }
+
+// Calcular intent signal
+const intent = container.twenty.calculateIntentSignal({
+  source: "google_ads",
+  lastContactDate: "2026-02-01T14:00:00Z",
+  nextContactDate: "2026-02-05T10:00:00Z",
+});
+// "high"
+```
+
+### MCP Tools Quick Reference
+
+**CRUD (6):** `twenty_create_lead`, `twenty_update_lead`, `twenty_get_lead`, `twenty_route_lead`, `twenty_delegate_lead`, `twenty_bulk_import`
+
+**Analytics (4):** `twenty_get_pipeline_stats`, `twenty_get_broker_stats`, `twenty_get_adoption_metrics`, `twenty_check_sla_violations`
+
+**Workflow (3):** `twenty_check_delegation_expiry`, `twenty_calculate_intent_signal`, `twenty_get_next_action`
+
+---
+
 ## Manual Lead Lookups
 
 ### Myriam Monica Spiero (January 29, 2026)
@@ -927,7 +1116,7 @@ Para normalizar: usar últimos 11 dígitos (`cpf.slice(-11)`).
 
 ---
 
-## MCP Server (RML-815) - Updated January 30, 2026
+## MCP Server (RML-815) - Updated February 3, 2026
 
 ### Overview
 
@@ -935,13 +1124,13 @@ MCP (Model Context Protocol) server that exposes ts-c2s-api's lead enrichment ca
 
 **Entry point:** `bun run mcp-server.ts`
 **SDK:** `@modelcontextprotocol/sdk` v1.4.1
-**Total Tools:** 55
+**Total Tools:** 72
 
 **Full Documentation:** See `docs/MCP_SERVER.md` for complete setup guide, troubleshooting, and development docs.
 
 ---
 
-### MCP Tools by Category (55 tools)
+### MCP Tools by Category (72 tools)
 
 #### Enrichment Tools (3)
 
@@ -1169,6 +1358,82 @@ MCP (Model Context Protocol) server that exposes ts-c2s-api's lead enrichment ca
 | `get_enrichment_health` | Health status vs threshold |
 | `get_enrichment_breakdown` | Breakdown by enrichment status |
 
+#### Meilisearch Company Tools (4) - NEW February 2026
+
+| Tool | Description |
+|------|-------------|
+| `find_companies_by_cpf` | Find all companies where CPF is partner (65M CNPJs) |
+| `get_company_by_cnpj` | Get detailed company info by CNPJ |
+| `search_companies` | Search companies by name or CNPJ |
+| `format_companies_message` | Format companies for C2S message |
+
+**Example output:**
+```json
+{
+  "success": true,
+  "cpf": "12345678901",
+  "totalCompanies": 2,
+  "totalCapitalSocial": 150000,
+  "totalCapitalSocialFormatted": "R$ 150.000,00",
+  "companies": [
+    {
+      "cnpj": "12345678000190",
+      "razaoSocial": "EMPRESA LTDA",
+      "capitalSocial": 100000,
+      "situacao": "ATIVA",
+      "isAdministrador": true
+    }
+  ]
+}
+```
+
+#### Twenty CRM Tools (6) - NEW February 2026
+
+| Tool | Description |
+|------|-------------|
+| `twenty_create_lead` | Create lead in Twenty CRM (auto-routes by tier) |
+| `twenty_update_lead` | Update existing Twenty lead |
+| `twenty_get_lead` | Fetch lead by ID (supports multi-workspace) |
+| `twenty_route_lead` | Route lead to workspace (S/A→WS-SENIOR, B/C/Risk→WS-GENERAL) |
+| `twenty_delegate_lead` | Delegate lead with expiration tracking |
+| `twenty_bulk_import` | Import multiple leads with deduplication |
+
+**Workspaces:**
+- `WS-OPS` - Admin/SuperManager (global visibility)
+- `WS-SENIOR` - Broker Senior/Manager (Tier S/A)
+- `WS-GENERAL` - Broker Jr/Assistants (Tier B/C/Risk)
+
+#### Twenty Analytics Tools (4) - NEW February 2026
+
+| Tool | Description |
+|------|-------------|
+| `twenty_get_pipeline_stats` | Pipeline stats (leads by tier/status, total value) |
+| `twenty_get_broker_stats` | Broker performance (leads, SLA compliance) |
+| `twenty_get_adoption_metrics` | Team adoption (follow-up rate, time to contact) |
+| `twenty_check_sla_violations` | Find SLA violations (S=2h, A=24h, B=48h, C=72h) |
+
+#### Twenty Workflow Tools (3) - NEW February 2026
+
+| Tool | Description |
+|------|-------------|
+| `twenty_check_delegation_expiry` | Find expiring delegations |
+| `twenty_calculate_intent_signal` | Calculate intent (low/medium/high) from activity |
+| `twenty_get_next_action` | Recommended next action for lead |
+
+**Example (next action):**
+```json
+{
+  "success": true,
+  "currentStatus": "qualificado",
+  "tier": "A",
+  "primaryAction": {
+    "action": "Agendar visita",
+    "priority": "medium",
+    "reason": "Lead qualificado sem visita há 15 dias."
+  }
+}
+```
+
 ---
 
 ### MCP Resources (3)
@@ -1214,7 +1479,7 @@ ts-c2s-api/
 └── src/mcp/
     ├── index.ts            # Server initialization
     ├── tools/
-    │   ├── index.ts        # Tool registry & routing (55 tools)
+    │   ├── index.ts        # Tool registry & routing (72 tools)
     │   ├── enrichment.ts   # enrich_lead, enrich_bulk, retry_failed
     │   ├── discovery.ts    # find_and_save_person, discover_cpf, etc.
     │   ├── leads.ts        # get_lead, list_leads, get_c2s_lead_status
@@ -1230,7 +1495,11 @@ ts-c2s-api/
     │   ├── insights.ts     # web insights
     │   ├── tier.ts         # tier calculator
     │   ├── search.ts       # web search
-    │   └── monitor.ts      # enrichment monitor
+    │   ├── monitor.ts      # enrichment monitor
+    │   ├── meilisearch.ts  # Meilisearch company tools (4)
+    │   ├── twenty.ts       # Twenty CRM lead tools (6)
+    │   ├── twenty-analytics.ts  # Twenty analytics tools (4)
+    │   └── twenty-workflow.ts   # Twenty workflow tools (3)
     └── resources/
         └── stats.ts        # Resource handlers (3 resources)
 ```
@@ -1382,5 +1651,5 @@ container.dbStorage.getC2SLeadStats(dateFrom?, dateTo?)
 
 ---
 
-**Última atualização:** Janeiro 31, 2026 (Meilisearch CPF search fix)  
+**Última atualização:** Fevereiro 3, 2026 (Twenty CRM integration, MCP tools expanded to 72)  
 **Mantido por:** Ronaldo Lima + Claude AI

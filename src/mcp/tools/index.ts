@@ -18,6 +18,10 @@ import { tierTools, handleTierTool } from "./tier";
 import { searchTools, handleSearchTool } from "./search";
 import { monitorTools, handleMonitorTool } from "./monitor";
 import { meilisearchTools, handleMeilisearchTool } from "./meilisearch";
+// Phase 3 tools: Twenty CRM Integration
+import { twentyTools, handleTwentyTool } from "./twenty";
+import { twentyAnalyticsTools, handleTwentyAnalyticsTool } from "./twenty-analytics";
+import { twentyWorkflowTools, handleTwentyWorkflowTool } from "./twenty-workflow";
 
 // Collect all tool definitions
 export function getAllTools(): Tool[] {
@@ -42,6 +46,10 @@ export function getAllTools(): Tool[] {
     ...searchTools,
     ...monitorTools,
     ...meilisearchTools,
+    // Phase 3: Twenty CRM Integration
+    ...twentyTools,
+    ...twentyAnalyticsTools,
+    ...twentyWorkflowTools,
   ];
 }
 
@@ -134,6 +142,21 @@ export async function handleToolCall(
   // Meilisearch tools
   if (meilisearchTools.some((t) => t.name === name)) {
     return handleMeilisearchTool(name, args, container);
+  }
+
+  // Twenty CRM tools
+  if (twentyTools.some((t) => t.name === name)) {
+    return handleTwentyTool(name, args, container);
+  }
+
+  // Twenty Analytics tools
+  if (twentyAnalyticsTools.some((t) => t.name === name)) {
+    return handleTwentyAnalyticsTool(name, args, container);
+  }
+
+  // Twenty Workflow tools
+  if (twentyWorkflowTools.some((t) => t.name === name)) {
+    return handleTwentyWorkflowTool(name, args, container);
   }
 
   throw new Error(`Unknown tool: ${name}`);

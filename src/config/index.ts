@@ -147,6 +147,20 @@ const configSchema = z.object({
     .url()
     .default("https://ibvi-meilisearch-v2.fly.dev"),
   MEILISEARCH_KEY: z.string().optional(),
+
+  // Twenty CRM (Lead Management)
+  TWENTY_BASE_URL: z
+    .string()
+    .url()
+    .default("https://twenty-server-production-1c77.up.railway.app"),
+  TWENTY_API_KEY: z.string().optional(),
+  TWENTY_API_KEY_WS_OPS: z.string().optional(),
+  TWENTY_API_KEY_WS_SENIOR: z.string().optional(),
+  TWENTY_API_KEY_WS_GENERAL: z.string().optional(),
+  TWENTY_ENABLED: z
+    .string()
+    .default("false")
+    .transform((val) => val.toLowerCase() === "true" || val === "1"),
 });
 
 export type Config = z.infer<typeof configSchema>;

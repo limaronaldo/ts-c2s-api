@@ -21,6 +21,7 @@ import { TierCalculatorService } from "./services/tier-calculator.service";
 import { WebSearchService } from "./services/web-search.service";
 import { EnrichmentMonitorService } from "./services/enrichment-monitor.service";
 import { MeilisearchCompanyService } from "./services/meilisearch-company.service";
+import { TwentyService } from "./services/twenty.service";
 
 /**
  * Simple dependency injection container
@@ -50,6 +51,7 @@ class ServiceContainer {
   private _webSearch?: WebSearchService;
   private _enrichmentMonitor?: EnrichmentMonitorService;
   private _meilisearchCompany?: MeilisearchCompanyService;
+  private _twenty?: TwentyService;
 
   get workApi(): WorkApiService {
     if (!this._workApi) {
@@ -212,6 +214,13 @@ class ServiceContainer {
     return this._meilisearchCompany;
   }
 
+  get twenty(): TwentyService {
+    if (!this._twenty) {
+      this._twenty = new TwentyService();
+    }
+    return this._twenty;
+  }
+
   // Reset all services (useful for testing)
   reset(): void {
     this._workApi = undefined;
@@ -237,6 +246,7 @@ class ServiceContainer {
     this._webSearch = undefined;
     this._enrichmentMonitor = undefined;
     this._meilisearchCompany = undefined;
+    this._twenty = undefined;
   }
 }
 
